@@ -1,0 +1,16 @@
+# 账单、导出和备份都是私人数据，只留在自己的电脑上 / 私有同步仓库里，不要提交到这个仓库
+*.pdf
+*.numbers
+*.csv
+*.xlsx
+private/
+*.private.json
+house-ledger-import*.json
+house-ledger-backup*.json
+合租账本备份*.json
+.DS_Store
+node_modules/
+# 工具的输出（PDF 解析结果、OCR 文字、Numbers 导出）和日历文件都可能有私人数据；仓库里没有正经的 .json / .txt 文件
+*.json
+*.txt
+*.ics
