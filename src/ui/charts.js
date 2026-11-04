@@ -170,8 +170,11 @@ export function columnChart(container, opts) {
       if (opts.stacked) {
         let up = 0, down = 0;
         const pos = segs.filter(x => x.v > 0), neg = segs.filter(x => x.v < 0);
-        pos.forEach((x, k) => { drawBar(g, cx - barW / 2, Y(up + x.v), barW, Y(up) - Y(up + x.v), x.s.color, k === pos.length - 1 ? 'top' : 'none', k > 0); up += x.v; });
-        neg.forEach((x, k) => { drawBar(g, cx - barW / 2, Y(down), barW, Y(down + x.v) - Y(down), x.s.color, k === neg.length - 1 ? 'bottom' : 'none', k > 0, true); down += x.v; });
+        // 极小分项可能不足半像素而不绘制，圆角应落在最外侧实际可见的分段上。
+        const top = pos.map((x, k) => Y(0) - Y(x.v) - (k > 0 ? 2 : 0) > 0.5).lastIndexOf(true);
+        const bottom = neg.map((x, k) => Y(x.v) - Y(0) - (k > 0 ? 2 : 0) > 0.5).lastIndexOf(true);
+        pos.forEach((x, k) => { drawBar(g, cx - barW / 2, Y(up + x.v), barW, Y(up) - Y(up + x.v), x.s.color, k === top ? 'top' : 'none', k > 0); up += x.v; });
+        neg.forEach((x, k) => { drawBar(g, cx - barW / 2, Y(down), barW, Y(down + x.v) - Y(down), x.s.color, k === bottom ? 'bottom' : 'none', k > 0, true); down += x.v; });
       } else {
         const w = barW, off = (segs.length * (w + gap) - gap) / 2;
         segs.forEach((x, k) => { const v = x.v; drawBar(g, cx - off + k * (w + gap), Y(Math.max(0, v)), w, Math.abs(Y(v) - Y(0)), x.s.color, v >= 0 ? 'top' : 'bottom', false); });
