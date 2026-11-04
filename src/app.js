@@ -1,5 +1,5 @@
 // 合租账本：启动、数据、路由、同步。各页面在 views/ 里，计算在 core/ 里。
-import { normalizeState, mergeStates, stamp, live, canon } from './core/store.js';
+import { normalizeState, mergeStates, stamp, live, canon, deletedRecord } from './core/store.js';
 import { createSync } from './core/sync.js';
 import { buildRentLedger } from './core/rent.js';
 import { today } from './core/dates.js';
@@ -57,7 +57,7 @@ function put(c, rec) {
 function remove(c, id) {
   const prev = S.data[c][id];
   if (!prev || prev.deleted) return null;
-  S.data[c][id] = stamp({ id, deleted: true }, prev);
+  S.data[c][id] = deletedRecord(prev);
   changed();
   return prev;
 }

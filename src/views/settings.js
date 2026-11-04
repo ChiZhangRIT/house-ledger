@@ -9,6 +9,7 @@ import { SPLIT_CATEGORIES } from '../core/providers.js';
 import { sourceNotes } from './notes.js';
 import { batchDocuments } from './documents.js';
 import { clearBillPdfs } from '../core/documents.js';
+import { openDeleted } from './deleted.js';
 
 export function render(root, ctx) {
   const S = ctx.S, set = (k, v) => ctx.quietly(() => ctx.setSetting(k, v));      // 不重画：免得吞掉下一下点击
@@ -61,6 +62,7 @@ export function render(root, ctx) {
     h('div.row', null,
       h('button.btn', { type: 'button', onclick: () => fileIn.click() }, t('set.import')),
       h('button.btn', { type: 'button', onclick: () => download(`house-ledger-backup-${ctx.D.today}.json`, JSON.stringify({ app: 'house-ledger', kind: 'backup', v: 1, createdAt: new Date().toISOString(), state: ctx.S })) }, t('set.export')),
+      h('button.btn', { type: 'button', onclick: () => openDeleted(ctx) }, t('deleted.title')),
       h('button.btn.danger', { type: 'button', onclick: () => clearDevice(ctx) }, t('set.clear'))),
     fileIn, batchDocuments(ctx)));
   const notes = sourceNotes(S); if (notes) root.append(notes);

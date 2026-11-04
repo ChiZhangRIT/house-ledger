@@ -1,9 +1,8 @@
 // 房东自用的住户与房租首页。
 import { h } from '../ui/dom.js';
-import { t, money, date } from '../i18n.js';
+import { t, money, date, month } from '../i18n.js';
 import { rentOn } from '../core/ledger.js';
-import { rentReceipts } from '../core/rent.js';
-import { monthRange } from '../core/analytics.js';
+import { rentReceipts, rentHistorySummary } from '../core/rent.js';
 import { columnChart } from '../ui/charts.js';
 import { avatar, statusChip } from './parts.js';
 import { openResident } from './residents.js';
@@ -23,11 +22,11 @@ export function render(root, ctx) {
   root.append(h('div.page-intro', null, h('p.muted', null, t('rent.intro')),
     h('div.row', null, h('button.btn', { type: 'button', onclick: () => openResident(ctx, null) }, '＋ ' + t('res.add')),
       tenants.length ? h('button.btn.primary', { type: 'button', onclick: () => openPayment(ctx) }, '＋ ' + t('rent.record')) : null)));
-  const month = D.today.slice(0, 7);
+  const currentMonth = D.today.slice(0, 7);
   const stat = (label, value) => h('div.stat', null, h('span.stat-label', null, label), h('span.stat-value.num', null, value));
   root.append(h('section.stats', null,
     stat(t('rent.living'), String(tenants.filter(r => r.moveIn <= D.today && (!r.moveOut || r.moveOut > D.today)).length)),
-    stat(t('rent.receivedMonth'), money(receipts.payments.filter(p => p.date.startsWith(month)).reduce((s, p) => s + p.amount, 0))),
+    stat(t('rent.receivedMonth'), money(receipts.payments.filter(p => p.date.startsWith(currentMonth)).reduce((s, p) => s + p.amount, 0))),
     stat(t('rent.knownDue'), money(Object.values(D.ledger.people).reduce((s, p) => s + p.overdue, 0)))));
   if (Object.values(D.ledger.people).some(p => p.unknownRent.length)) root.append(h('p.note', null, t('rent.unknownHint')));
   for (const [label, list] of [[t('res.living'), D.residents.filter(r => !r.moveOut || r.moveOut > D.today)], [t('res.movedOut'), D.residents.filter(r => r.moveOut && r.moveOut <= D.today)]]) {
@@ -43,20 +42,30 @@ export function render(root, ctx) {
     root.append(label === t('res.movedOut') ? h('details.card', null, h('summary', null, label + ' · ' + list.length), people)
       : h('section.card', null, h('h2.section-h', null, label), people));
   }
-  const original = Object.values(ctx.S.data.rents).filter(r => !r.deleted && r.paid);
-  const rawDates = original.map(r => r.periodStart.slice(0, 7)).sort();
-  const rawMonths = rawDates.length ? monthRange(rawDates[0], rawDates.at(-1)) : [];
-  const known = receipts.months.length > 0;
-  const months = known ? receipts.months.slice(-24) : rawMonths.slice(-24);
-  const chart = h('section.card.chart-card');
-  if (months.length) {
-    columnChart(chart, { title: t(known ? 'rent.receiptsChart' : 'rent.ticksChart'), labels: months.map(k => k.replace('-', '/')),
-      series: [{ key: 'rent', name: t(known ? 'rent.receipts' : 'rent.confirmed'), color: 'var(--accent)',
-        values: known ? receipts.values.slice(-24) : months.map(k => original.filter(r => r.periodStart.startsWith(k)).length || null) }],
-      format: v => known ? money(v) : String(v), tickFormat: v => known ? money(v, { whole: v === 0 || Math.abs(v) >= 10 }) : Number.isInteger(v) ? String(v) : '',
-      height: 220, tableLabel: t('viz.table'), xName: t(known ? 'rent.receiptMonth' : 'rent.sourcePeriod') });
-    chart.append(h('p.note', null, t(known ? 'rent.receiptsNote' : 'rent.ticksNote')));
-    root.append(chart);
+  const history = rentHistorySummary(ctx.S);
+  if (history.values.some(v => v != null)) {
+    const chart = h('section.card.chart-card');
+    columnChart(chart, { title: t('rent.historyChart'), labels: history.months.map(k => k.replace('-', '/')),
+      longLabels: history.months.map((k, i) => month(k) + (history.partial[i] ? ' · ' + t('rent.historyPartial') : '')),
+      series: [{ key: 'rent', name: t('rent.receivedAmount'), color: 'var(--accent)', values: history.values }], partial: history.partial,
+      visibleCount: 12, format: v => money(v), tickFormat: v => money(v, { whole: v === 0 || Math.abs(v) >= 10 }),
+      height: 220, tableLabel: t('viz.table'), xName: t('rent.month') });
+    chart.append(h('p.note', null, t('rent.historyChartNote'))); root.append(chart);
+  }
+  if (history.missing.length) root.append(h('section.card', null, h('h2.section-h', null, t('rent.historyMissing')),
+    h('p.note', null, t('rent.historyMissingHint')),
+    h('div.people', null, tenants.filter(r => history.missing.some(x => x.residentId === r.id)).map(r => {
+      const records = history.missing.filter(x => x.residentId === r.id);
+      return h('a.person', { href: '#/person/' + encodeURIComponent(r.id) }, avatar(r), h('span.person-name', null, r.name),
+        h('span.small.muted', null, t('rent.missingMonths', { n: records.length })), h('span.person-amt', null, t('rent.completeHistory') + ' ›'));
+    }))));
+  if (receipts.months.length) {
+    const chart = h('section.card.chart-card');
+    columnChart(chart, { title: t('rent.receiptsChart'), labels: receipts.months.map(k => k.replace('-', '/')),
+      series: [{ key: 'rent', name: t('rent.receipts'), color: 'var(--accent)', values: receipts.values }], visibleCount: 12,
+      format: v => money(v), tickFormat: v => money(v, { whole: v === 0 || Math.abs(v) >= 10 }),
+      height: 220, tableLabel: t('viz.table'), xName: t('rent.receiptMonth') });
+    chart.append(h('p.note', null, t('rent.receiptsNote'))); root.append(chart);
   }
   const unclassified = Object.values(ctx.S.data.payments).filter(p => !p.deleted && p.purpose !== 'rent');
   if (unclassified.length) root.append(h('details.card', null, h('summary', null, t('rent.unclassified', { n: unclassified.length })),

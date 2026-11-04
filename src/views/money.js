@@ -2,7 +2,8 @@
 import { h, openSheet, copyText, signButton } from '../ui/dom.js';
 import { t, money, date, period, getLang } from '../i18n.js';
 import { newId } from '../core/store.js';
-import { addDays } from '../core/dates.js';
+import { addDays, isISODate } from '../core/dates.js';
+import { buildRentLedger } from '../core/rent.js';
 import { buildStatement } from '../core/statement.js';
 import { parseAmount } from '../ui/parse.js';
 import { residentName } from './parts.js';
@@ -12,11 +13,11 @@ const lastMethod = (ctx, rid) => { const p = ctx.D.payments.find(x => x.resident
 const rentPeople = ctx => ctx.D.residents.filter(r => !r.isOwner).sort((a, b) => Number(!!a.moveOut && a.moveOut <= ctx.D.today) - Number(!!b.moveOut && b.moveOut <= ctx.D.today) || b.moveIn.localeCompare(a.moveIn));
 
 /** 记一笔收款（金额预填当前欠款；负数是退款） */
-export function openPayment(ctx, { residentId, amount, periodKey } = {}) {
-  const L = ctx.D.ledger;
+export function openPayment(ctx, { residentId, amount, periodKey, payment } = {}) {
+  const L = payment ? buildRentLedger({ ...ctx.S, data: { ...ctx.S.data, payments: { ...ctx.S.data.payments, [payment.id]: { ...payment, deleted: true } } } }, ctx.D.today) : ctx.D.ledger;
   const people = rentPeople(ctx);
-  let rid = residentId || (people[0] && people[0].id);
-  const f = { amount: amount != null ? amount : Math.max(0, (L.people[rid] || {}).outstanding || 0), date: ctx.D.today, method: lastMethod(ctx, rid), note: '' };
+  let rid = payment?.residentId || residentId || (people[0] && people[0].id);
+  const f = { amount: payment?.amount ?? amount ?? Math.max(0, (L.people[rid] || {}).outstanding || 0), date: payment?.date || ctx.D.today, method: payment?.method || lastMethod(ctx, rid), note: payment?.note || '' };
   const amtIn = h('input.big-amt', { inputmode: 'decimal', value: f.amount ? f.amount.toFixed(2) : '', oninput: e => { f.amount = parseAmount(e.target.value); preview(); } });
   const prevEl = h('p.note');
   const quick = h('div.chips');
@@ -36,15 +37,18 @@ export function openPayment(ctx, { residentId, amount, periodKey } = {}) {
     people.map(r => h('option', { value: r.id, selected: r.id === rid }, r.name)));
   renderMethods(); renderQuick(); preview();
   const save = () => {
-    if (f.amount == null || !f.amount || !rid) { amtIn.focus(); return; }
-    const rec = ctx.put('payments', { id: 'pay_' + newId(), purpose: 'rent', residentId: rid, date: f.date || ctx.D.today, amount: f.amount, method: f.method, note: f.note });
+    if (!Number.isFinite(f.amount) || !f.amount || Math.abs(f.amount) > 1e7 || !rid) { amtIn.focus(); return; }
+    if (!isISODate(f.date)) { prevEl.textContent = t('rent.historyError.date'); return; }
+    const current = payment && ctx.S.data.payments[payment.id];
+    if (current && current.updatedAt !== payment.updatedAt && !confirm(t(current.deleted ? 'form.deletedElsewhere' : 'form.changedElsewhere'))) return;
+    const rec = ctx.put('payments', { ...payment, deleted: undefined, deletedAt: undefined, id: payment?.id || 'pay_' + newId(), purpose: 'rent', residentId: rid, date: f.date, amount: f.amount, method: f.method, note: f.note });
     sheet.close();
     const p = ctx.D.ledger.people[rid] || {};
     const msg = t('pay.saved', { amount: rec.amount, name: residentName(ctx, rid) }) + (p.items?.length && !p.unknownRent?.length && Math.abs(p.balance) <= 0.005 ? ' · ' + t('st.settled') : '');
-    ctx.toast(msg, { action: t('undo'), onAction: () => ctx.remove('payments', rec.id), ms: 10000 });
+    ctx.toast(msg, { action: t('undo'), onAction: () => payment ? ctx.put('payments', payment) : ctx.remove('payments', rec.id), ms: 10000 });
   };
   const sheet = openSheet({
-    title: t('pay.title'),
+    title: t(payment ? 'rent.editReceipt' : 'pay.title'),
     body: h('form.form', { onsubmit: e => { e.preventDefault(); save(); } },
       h('label.field', null, h('span.field-label', null, t('pay.who')), sel),
       h('label.field', null, h('span.field-label', null, t('pay.amount')), h('div.amt-line', null, amtIn, signButton(amtIn)), h('span.hint', null, t('pay.refundHint'))),
@@ -52,7 +56,7 @@ export function openPayment(ctx, { residentId, amount, periodKey } = {}) {
       h('div.field-row', null,
         h('label.field', null, h('span.field-label', null, t('pay.date')), h('input', { type: 'date', value: f.date, oninput: e => { f.date = e.target.value; } })),
         h('div.field', null, h('span.field-label', null, t('pay.method')), methods)),
-      h('label.field', null, h('span.field-label', null, t('form.note')), h('input', { value: '', placeholder: t('pay.notePh'), oninput: e => { f.note = e.target.value; } })),
+      h('label.field', null, h('span.field-label', null, t('form.note')), h('input', { value: f.note, placeholder: t('pay.notePh'), oninput: e => { f.note = e.target.value; } })),
       prevEl, h('p.note', null, t('pay.fifo')),
       h('button', { type: 'submit', hidden: true })),
     foot: [h('span.sp'), h('button.btn', { type: 'button', onclick: () => sheet.close() }, t('cancel')), h('button.btn.primary', { type: 'button', onclick: save }, t('pay.save'))],

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { blankState, mergeStates, normalizeState, canon, stamp, live, newId } from '../src/core/store.js';
+import { blankState, mergeStates, normalizeState, canon, stamp, live, newId, deletedRecord, restoredRecord } from '../src/core/store.js';
 
 const withBill = (s, id, fields) => { s.data.bills[id] = { id, ...fields }; return s; };
 
@@ -19,6 +19,46 @@ test('deletions win over older edits and are not resurrected', () => {
   const b = withBill(blankState(), 'b1', { total: 10, deleted: true, updatedAt: 150 });
   assert.equal(mergeStates(a, b).data.bills.b1.deleted, true);
   assert.equal(live(mergeStates(a, b), 'bills').length, 0);
+});
+
+test('删除保留完整记录，重启及同步后可用相同 id 恢复，旧删除不会再次覆盖恢复', () => {
+  const original = { id: 'b', providerId: 'p', statementDate: '2026-01-05', periodStart: '2025-12-01', periodEnd: '2026-01-01', total: 100, updatedAt: 10, source: { file: 'bill.pdf' } };
+  const removed = deletedRecord(original, 20);
+  assert.equal(removed.total, 100); assert.deepEqual(removed.source, original.source);
+  const state = blankState(); state.data.bills.b = removed;
+  const reloaded = normalizeState(JSON.parse(JSON.stringify(state)));
+  assert.equal(live(reloaded, 'bills').length, 0);
+  const restored = restoredRecord('bills', reloaded.data.bills.b, null, 15);
+  assert.equal(restored.id, original.id); assert.equal(restored.total, 100);
+  assert.equal(restored.deleted, undefined); assert.equal(restored.deletedAt, undefined);
+  assert.ok(restored.updatedAt > removed.updatedAt);
+  const other = blankState(); other.data.bills.b = restored;
+  for (const merged of [mergeStates(reloaded, other), mergeStates(other, reloaded)]) assert.equal(live(merged, 'bills').length, 1);
+});
+
+test('旧删除标记不伪造内容；只能从同 id 的有效备份恢复，且不覆盖现有记录', () => {
+  const removed = { id: 'r', deleted: true, updatedAt: 20 };
+  assert.equal(restoredRecord('residents', removed), null);
+  assert.equal(restoredRecord('residents', removed, { id: 'other', name: 'A', moveIn: '2025-01-01' }), null);
+  assert.equal(restoredRecord('residents', removed, { id: 'r', name: 'A', moveIn: 'bad' }), null);
+  const backup = { id: 'r', name: 'A', moveIn: '2025-01-01', rent: [{ from: '2025-01-01', amount: 1000 }] };
+  assert.equal(restoredRecord('residents', removed, backup).name, 'A');
+  assert.equal(restoredRecord('residents', removed, { ...backup, updatedAt: 1000 }, 10).updatedAt, 1001);
+  assert.equal(restoredRecord('residents', backup, backup), null);
+});
+
+test('历史实收金额、备注及批注关联在备份和同步后保持，非法实收不成为收入', () => {
+  const s = blankState();
+  s.data.rents.r = { id: 'r', residentId: 'person', periodStart: '2026-09-16', history: true, paid: true, receivedAmount: 0, note: '备注', updatedAt: 2 };
+  s.data.comments.c = { id: 'c', target: { collection: 'rents', id: 'r' }, comments: [{ text: '历史备注' }], updatedAt: 1 };
+  const reloaded = normalizeState(JSON.parse(JSON.stringify(s)));
+  assert.equal(reloaded.data.rents.r.receivedAmount, 0);
+  assert.equal(reloaded.data.rents.r.note, '备注');
+  assert.equal(mergeStates(blankState(), reloaded).data.comments.c.target.id, 'r');
+  for (const bad of [-1, '100', Infinity]) {
+    s.data.rents.r.receivedAmount = bad;
+    assert.equal(normalizeState(s).data.rents.r.receivedAmount, null);
+  }
 });
 
 test('same timestamp but different content resolves the same way on every device', () => {

@@ -1,4 +1,4 @@
-// 住户详情只展示房租；原表批注和历史打勾保留原样。
+// 住户详情：房租台账、收款和可补填的历史房租。
 import { h } from '../ui/dom.js';
 import { t, money, date } from '../i18n.js';
 import { rentOn } from '../core/ledger.js';
@@ -7,6 +7,7 @@ import { rentStatus } from './tenants.js';
 import { openPayment, openAdjustment, openPeriodCell, periodLabel } from './money.js';
 import { openResident } from './residents.js';
 import { sourceNotes } from './notes.js';
+import { historySection } from './rentHistory.js';
 
 export function render(root, ctx, [id]) {
   const D = ctx.D, r = ctx.S.data.residents[id];
@@ -19,7 +20,7 @@ export function render(root, ctx, [id]) {
     h('p', null, r.isOwner ? t('res.owner') : rent == null ? t('rent.monthlyUnknown') : t('res.rentNow', { amount: rent })),
     h('div.row', null, p ? h('button.btn.primary', { type: 'button', onclick: () => openPayment(ctx, { residentId: id }) }, t('rent.record')) : null,
       h('button.btn', { type: 'button', onclick: () => openResident(ctx, r) }, t('res.edit')))));
-  const notes = sourceNotes(ctx.S, 'residents', id); if (notes) root.append(notes);
+  const notes = sourceNotes(ctx.S, 'residents', id, false); if (notes) root.append(h('section.card', null, notes));
   if (p) {
     const keys = [...new Set(p.items.map(x => x.period))].sort().reverse();
     if (keys.length) root.append(h('section.card', null, h('h2.section-h', null, t('rent.account')),
@@ -33,15 +34,13 @@ export function render(root, ctx, [id]) {
     if (p.payments.length) root.append(h('section.card', null, h('h2.section-h', null, t('rent.receipts')),
       h('table.data-table', null, h('tbody', null, [...p.payments].reverse().map(x => h('tr', null,
         h('th', null, date(x.date), h('div.small.muted', null, t('method.' + (x.method || 'other')), x.note ? ' · ' + x.note : '')),
-        h('td.num', null, money(x.amount)), h('td', null, h('button.link-btn', { type: 'button', onclick: () => {
+        h('td.num', null, money(x.amount)), h('td', null, h('div.row', null,
+          h('button.btn', { type: 'button', onclick: () => openPayment(ctx, { payment: x }) }, t('bill.edit')),
+          h('button.btn.danger', { type: 'button', onclick: () => {
           if (confirm(t('pay.deleteConfirm'))) { const prev = ctx.remove('payments', x.id); ctx.toast(t('pay.deleted'), { action: t('undo'), onAction: () => ctx.put('payments', prev) }); }
-        } }, t('bill.delete')))))))));
+        } }, t('bill.delete'))))))))));
     root.append(h('details.card', null, h('summary', null, t('rent.adjustments')), h('p.note', null, t('rent.adjustmentsHint')),
       h('button.btn', { type: 'button', onclick: () => openAdjustment(ctx, { residentId: id }) }, t('adj.title'))));
   }
-  const old = Object.values(ctx.S.data.rents).filter(x => !x.deleted && x.residentId === id && x.paid).sort((a, b) => b.periodStart.localeCompare(a.periodStart));
-  if (old.length) root.append(h('section.card', null, h('h2.section-h', null, t('rent.originalHistory')), h('p.note', null, t('rent.ticksNote')),
-    h('div.table-scroll', null, h('table.data-table', null, h('tbody', null, old.map(x => h('tr', null,
-      h('th', null, date(x.periodStart, 'num')), h('td', null, '✓ ' + t('rent.confirmed')),
-      h('td.num', null, typeof x.amount === 'number' ? money(x.amount) : t('rent.notRecorded')), h('td', null, sourceNotes(ctx.S, 'rents', x.id)))))))));
+  if (!r.isOwner) root.append(historySection(ctx, id));
 }

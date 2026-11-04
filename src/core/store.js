@@ -48,7 +48,7 @@ const VALIDATE = {
     source: isObj(r.source) ? r.source : {},
   } : null),
   payments: r => (typeof r.residentId === 'string' && ISO(r.date) && amount(r.amount) ? r : null),
-  rents: r => (typeof r.residentId === 'string' && typeof r.periodStart === 'string' && /^\d{4}-\d{2}/.test(r.periodStart) ? { ...r, amount: amount(r.amount) ? r.amount : null } : null),
+  rents: r => (typeof r.residentId === 'string' && typeof r.periodStart === 'string' && /^\d{4}-\d{2}/.test(r.periodStart) ? { ...r, amount: amount(r.amount) ? r.amount : null, receivedAmount: amount(r.receivedAmount) && r.receivedAmount >= 0 ? r.receivedAmount : null } : null),
   adjustments: r => (typeof r.residentId === 'string' && MONTH(r.collectPeriod) && amount(r.amount) ? r : null),
 };
 
@@ -101,6 +101,21 @@ export function mergeStates(a, b) {
 /** 新的或修改过的记录：盖上修改时间（比旧的至少新 1 毫秒，避免同一毫秒内改两次分不出先后） */
 export function stamp(rec, prev, now = Date.now()) {
   return { ...rec, updatedAt: Math.max(now, ((prev && prev.updatedAt) || 0) + 1) };
+}
+
+/** 删除仍参与同步，但保留内容，方便在「最近删除」中恢复。 */
+export function deletedRecord(rec, now = Date.now()) {
+  return rec && !rec.deleted ? stamp({ ...rec, deleted: true, deletedAt: now }, rec, now) : null;
+}
+
+/** 旧版只有 id 的删除标记必须有同 id 的有效备份；恢复时间必须晚于删除。 */
+export function restoredRecord(collection, removed, backup = null, now = Date.now()) {
+  if (!removed?.deleted || !VALIDATE[collection]) return null;
+  const source = backup || removed;
+  if (source.id !== removed.id) return null;
+  const { deleted, deletedAt, ...rec } = source;
+  const valid = VALIDATE[collection](rec);
+  return valid ? stamp(valid, { updatedAt: Math.max(removed.updatedAt || 0, source.updatedAt || 0) }, now) : null;
 }
 
 /** 没有删除的记录列表 */

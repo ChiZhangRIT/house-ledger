@@ -1,4 +1,4 @@
-// 住户：时间轴 + 列表；编辑入住/搬出、权重、参与方式（分摊 / 不参与 / 我承担）、月租。
+// 住户：时间轴 + 列表；编辑入住/搬出、权重、参与方式（分摊 / 不参与 / 房东承担）、月租。
 // 保存前如果会改变金额（未锁定账单的分摊、房租），先给出影响预览。
 import { h, openSheet } from '../ui/dom.js';
 import { t, money, date } from '../i18n.js';
@@ -137,7 +137,8 @@ export function openResident(ctx, r) {
       rentBox,
       h('details', null, h('summary', null, t('rent.legacyRules')),
         h('fieldset', null, h('legend', null, t('res.weights')), h('p.note', null, t('res.weightsHint')), listEl(w.weights, 'weight', '×1', v => (v === '' ? null : Number(v)))),
-        h('fieldset', null, h('legend', null, t('res.participation')), h('div.field-row', null, SPLIT_CATEGORIES.map(partSel)), h('p.note', null, t('res.partHint')))),
+        h('fieldset', null, h('legend', null, t('res.participation')), h('div.field-row', null, SPLIT_CATEGORIES.map(partSel)), h('p.note', null, t('res.partHint')),
+          h('p.note', null, t('res.ownerNamed', { name: ctx.D.residents.find(r => r.isOwner)?.name || t('res.ownerNotSet') })))),
       h('label.field', null, h('span.field-label', null, t('form.note')), h('textarea', { rows: 2, value: w.note || '', oninput: e => { w.note = e.target.value; dirty = true; } })),
       err),
     foot: [!isNew ? h('button.btn.danger', { type: 'button', onclick: del }, t('bill.delete')) : null, h('span.sp'),
