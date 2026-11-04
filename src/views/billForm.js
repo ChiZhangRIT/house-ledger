@@ -7,11 +7,11 @@ import { billStats, compareBill, billShares, billDays } from '../core/analytics.
 import { overlapDays, addDays, isISODate } from '../core/dates.js';
 import { newId } from '../core/store.js';
 import { KNOWN_PROVIDERS, ITEM_PRESETS, USAGE_PRESETS, USAGE_UNITS } from '../core/providers.js';
-import { defaultCollectPeriod, cycleDay } from '../core/ledger.js';
 import { parseAmount } from '../ui/parse.js';
 import { splitTable, checkList, explainLine } from './parts.js';
 import { itemLabel } from './billDetail.js';
-import { periodChoices, periodLabel } from './money.js';
+import { fieldGuide } from './notes.js';
+import { readPdf, saveBillPdf } from '../core/documents.js';
 
 export { parseAmount };
 const clone = o => JSON.parse(JSON.stringify(o));
@@ -38,16 +38,6 @@ function providerInfo(ctx, id) {
   if (p && !p.deleted) return p;
   return KNOWN_PROVIDERS[String(id).replace(/^p_/, '')] || { category: 'internet' };
 }
-/** 新账单默认计入哪一期：跟下一次交房租一起收；早于开账期的不计入 */
-function autoCollect(ctx, statementDate) {
-  if (!isISODate(statementDate)) return null;
-  const cd = cycleDay(ctx.S), start = ctx.S.settings.ledgerStart;
-  // 补录的旧账单：当时本该在开账期之前的那期收，就只做统计（11/8 的账单在 11/16 开账时照常收）
-  if (start && defaultCollectPeriod(statementDate, statementDate, cd) < start) return null;
-  const k = defaultCollectPeriod(statementDate, ctx.D.today, cd);
-  return start && k < start ? null : k;
-}
-
 /** 识别结果 → 账单表单的初始内容 */
 export function draftToBill(ctx, draft, src = {}) {
   return {
@@ -57,6 +47,7 @@ export function draftToBill(ctx, draft, src = {}) {
     items: (draft.items || []).map(i => ({ key: i.key, label: i.label, amount: i.amount })),
     usage: (draft.usage || []).map(u => ({ key: u.key, amount: u.amount, unit: u.unit })),
     accountLast4: draft.accountLast4 || null,
+    itemPeriods: draft.servicePeriods || {},
     allocation: { mode: 'auto' }, note: '',
     source: { method: src.method || 'pdf', file: src.file || null, size: src.size || null, sha256: src.sha256 || null, parser: draft.provider || null, warnings: draft.warnings || [], at: Date.now() },
   };
@@ -90,9 +81,8 @@ export function openBillForm(ctx, o) {
   const fromPdf = !o.existing && w.source && (w.source.method === 'pdf' || w.source.method === 'paste');
   const origin = {};       // 每个字段的来历：pdf / missing / edited
   if (fromPdf) for (const f of ['providerId', 'statementDate', 'periodStart', 'periodEnd', 'dueDate', 'total']) origin[f] = w[f] != null && w[f] !== '' ? 'pdf' : 'missing';
-  let dirty = false, done = false, skipped = false, saved = null;
-  let collectTouched = !!o.existing;
-  if (!o.existing) w.collectPeriod = autoCollect(ctx, w.statementDate);
+  let dirty = false, done = false, skipped = false, saved = null, saving = false;
+  if (!o.existing) w.collectPeriod = null;
 
   const checksEl = h('div.form-checks'), cmpEl = h('div.form-compare'), splitEl = h('div.form-split');
   const itemsEl = h('div.rows'), usageEl = h('div.rows'), manualEl = h('div.manual-shares');
@@ -126,7 +116,6 @@ export function openBillForm(ctx, o) {
       class: [attrs.class, origin[f] === 'missing' ? 'missing' : null].filter(Boolean).join(' ') || null,
       oninput: e => {
         w[f] = e.target.value; e.target.classList.remove('missing');
-        if (f === 'statementDate' && !collectTouched) { w.collectPeriod = autoCollect(ctx, w.statementDate); renderCollect(); }
         touch(f);
       } });
     return el;
@@ -222,16 +211,6 @@ export function openBillForm(ctx, o) {
     } }), h('span', null, t('alloc.' + m)))));
 
   const paidBox = h('input', { type: 'checkbox', checked: !!w.paidAt, onchange: e => { w.paidAt = e.target.checked ? ctx.D.today : null; dirty = true; } });
-  const collectEl = h('div');
-  function renderCollect() {
-    const keys = periodChoices(ctx);
-    if (w.collectPeriod && !keys.includes(w.collectPeriod)) keys.push(w.collectPeriod);
-    collectEl.replaceChildren(h('label.field', null, h('span.field-label', null, t('form.collectPeriod')),
-      h('select', { onchange: e => { w.collectPeriod = e.target.value || null; collectTouched = true; dirty = true; } },
-        h('option', { value: '', selected: !w.collectPeriod }, t('form.noCollect')),
-        keys.sort().map(k => h('option', { value: k, selected: k === w.collectPeriod }, periodLabel(ctx, k)))),
-      h('span.hint', null, t('form.collectHint'))));
-  }
   const saveBtn = h('button.btn.primary', { type: 'button', onclick: save });
   const warnings = (w.source && w.source.warnings) || [];
 
@@ -252,10 +231,10 @@ export function openBillForm(ctx, o) {
       daysEl),
     h('fieldset', null, h('legend', null, t('form.amounts')),
       h('label.field', null, label('total', t('field.total')), (() => { const inp = input('total', { inputmode: 'decimal', class: 'big-amt', placeholder: '0.00' }); return h('div.amt-line', null, inp, signButton(inp)); })(), h('span.hint', null, t('form.totalHint'))),
-      h('div.field', null, h('span.field-label', null, t('bill.items')), itemsEl, itemsSumEl)),
+      h('div.field', null, h('span.field-label', null, t('bill.items')), itemsEl, itemsSumEl), fieldGuide(w.items.map(i => i.key))),
     h('fieldset', null, h('legend', null, t('bill.usage')), usageEl),
-    h('fieldset', null, h('legend', null, t('form.compare')), cmpEl),
-    h('fieldset', null, h('legend', null, t('bill.split')), allocEl, manualEl, splitEl, collectEl),
+    h('details', null, h('summary', null, t('form.compare')), cmpEl),
+    h('details', null, h('summary', null, t('rent.legacyRules')), allocEl, manualEl, splitEl),
     h('fieldset', null, h('legend', null, t('form.more')),
       h('label.check-line', null, paidBox, h('span', null, t('form.paid'))),
       h('label.field', null, h('span.field-label', null, t('form.note')), h('textarea', { rows: 2, value: w.note || '', oninput: e => { w.note = e.target.value; dirty = true; } }))));
@@ -268,9 +247,10 @@ export function openBillForm(ctx, o) {
     onClose: () => { if (o.onDone) o.onDone({ saved, skipped }); },
   });
   for (const f of Object.keys(tags)) markTag(f);
-  renderItems(); renderUsage(); renderManual(); renderCollect(); update();
+  renderItems(); renderUsage(); renderManual(); update();
 
-  function save() {
+  async function save() {
+    if (saving) return;
     const b = asBill();
     const checks = billChecks(b, ctx.D.bills, { editingId, anomalyPct: ctx.S.settings.anomalyPct, lockedTotal: o.existing ? o.existing.total : null, providers: { ...ctx.D.providers, [b.providerId]: providerInfo(ctx, b.providerId) } });
     if (checks.some(c => c.level === 'error')) { checksEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
@@ -296,11 +276,16 @@ export function openBillForm(ctx, o) {
     rec.items = rec.items.map(i => ({ key: i.key || 'other', label: i.label || itemLabel(i), amount: i.amount }));
     if (!rec.dueDate) rec.dueDate = null;
     const prev = ctx.S.data.bills[id];
+    let pdfFailed = false;
+    if (o.pdfFile) {
+      saving = true; saveBtn.disabled = true;
+      try { await saveBillPdf(id, await readPdf(o.pdfFile)); } catch (e) { pdfFailed = true; }
+    }
     saved = ctx.put('bills', rec);
     done = true;
     sheet.close();
     const n = Object.keys(billShares(saved, provider, ctx.D.residents).shares).length;
-    ctx.toast(o.existing ? t('form.savedEdit') : t('form.saved', { provider: provider.name, period: period(saved.periodStart, saved.periodEnd), n }), {
+    ctx.toast(pdfFailed ? t('pdf.billSavedWithout') : o.existing ? t('form.savedEdit') : t('form.saved', { provider: provider.name, period: period(saved.periodStart, saved.periodEnd), n }), {
       action: t('undo'), ms: 10000,
       onAction: () => { if (prev && !prev.deleted) ctx.put('bills', prev); else ctx.remove('bills', id); },
     });

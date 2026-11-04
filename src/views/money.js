@@ -9,11 +9,12 @@ import { residentName } from './parts.js';
 
 export const METHODS = ['zelle', 'venmo', 'cash', 'check', 'other'];
 const lastMethod = (ctx, rid) => { const p = ctx.D.payments.find(x => x.residentId === rid && x.method); return p ? p.method : 'zelle'; };
+const rentPeople = ctx => ctx.D.residents.filter(r => !r.isOwner).sort((a, b) => Number(!!a.moveOut && a.moveOut <= ctx.D.today) - Number(!!b.moveOut && b.moveOut <= ctx.D.today) || b.moveIn.localeCompare(a.moveIn));
 
 /** 记一笔收款（金额预填当前欠款；负数是退款） */
 export function openPayment(ctx, { residentId, amount, periodKey } = {}) {
   const L = ctx.D.ledger;
-  const people = ctx.D.residents.filter(r => !r.isOwner);
+  const people = rentPeople(ctx);
   let rid = residentId || (people[0] && people[0].id);
   const f = { amount: amount != null ? amount : Math.max(0, (L.people[rid] || {}).outstanding || 0), date: ctx.D.today, method: lastMethod(ctx, rid), note: '' };
   const amtIn = h('input.big-amt', { inputmode: 'decimal', value: f.amount ? f.amount.toFixed(2) : '', oninput: e => { f.amount = parseAmount(e.target.value); preview(); } });
@@ -29,17 +30,17 @@ export function openPayment(ctx, { residentId, amount, periodKey } = {}) {
   const preview = () => {
     const p = L.people[rid] || { balance: 0 };
     const after = Math.round((p.balance - (f.amount || 0)) * 100) / 100;
-    prevEl.textContent = f.amount == null ? t('pay.badAmount') : after > 0.005 ? t('pay.after', { amount: after }) : after < -0.005 ? t('pay.overpay', { amount: -after }) : t('pay.settles');
+    prevEl.textContent = f.amount == null ? t('pay.badAmount') : !p.items?.length || p.unknownRent?.length ? t('rent.receiptOnlyHint') : after > 0.005 ? t('pay.after', { amount: after }) : after < -0.005 ? t('pay.overpay', { amount: -after }) : t('pay.settles');
   };
   const sel = h('select', { onchange: e => { rid = e.target.value; f.method = lastMethod(ctx, rid); const o = Math.max(0, (L.people[rid] || {}).outstanding || 0); f.amount = o; amtIn.value = o ? o.toFixed(2) : ''; renderMethods(); renderQuick(); preview(); } },
     people.map(r => h('option', { value: r.id, selected: r.id === rid }, r.name)));
   renderMethods(); renderQuick(); preview();
   const save = () => {
     if (f.amount == null || !f.amount || !rid) { amtIn.focus(); return; }
-    const rec = ctx.put('payments', { id: 'pay_' + newId(), residentId: rid, date: f.date || ctx.D.today, amount: f.amount, method: f.method, note: f.note });
+    const rec = ctx.put('payments', { id: 'pay_' + newId(), purpose: 'rent', residentId: rid, date: f.date || ctx.D.today, amount: f.amount, method: f.method, note: f.note });
     sheet.close();
     const p = ctx.D.ledger.people[rid] || {};
-    const msg = t('pay.saved', { amount: rec.amount, name: residentName(ctx, rid) }) + (p.balance <= 0.005 ? ' · ' + t('st.settled') : '');
+    const msg = t('pay.saved', { amount: rec.amount, name: residentName(ctx, rid) }) + (p.items?.length && !p.unknownRent?.length && Math.abs(p.balance) <= 0.005 ? ' · ' + t('st.settled') : '');
     ctx.toast(msg, { action: t('undo'), onAction: () => ctx.remove('payments', rec.id), ms: 10000 });
   };
   const sheet = openSheet({
@@ -62,13 +63,13 @@ export function openPayment(ctx, { residentId, amount, periodKey } = {}) {
 /** 加一笔调整：正数加收，负数减免；期初余额用 kind = opening */
 export function openAdjustment(ctx, { residentId, kind = 'other' } = {}) {
   const L = ctx.D.ledger;
-  const people = ctx.D.residents.filter(r => !r.isOwner);
+  const people = rentPeople(ctx);
   const f = { residentId: residentId || (people[0] && people[0].id), amount: null, kind, label: kind === 'opening' ? t('adj.kind.opening') : '', collectPeriod: kind === 'opening' && ctx.S.settings.ledgerStart ? ctx.S.settings.ledgerStart : L.current };
   const err = h('p.err', { hidden: true });
   const save = () => {
     if (f.amount == null || !f.amount) { err.textContent = t('pay.badAmount'); err.hidden = false; return; }
     if (!f.label.trim()) { err.textContent = t('adj.needLabel'); err.hidden = false; return; }
-    const rec = ctx.put('adjustments', { id: 'adj_' + newId(), residentId: f.residentId, date: ctx.D.today, amount: f.amount, kind: f.kind, label: f.label.trim(), collectPeriod: f.collectPeriod });
+    const rec = ctx.put('adjustments', { id: 'adj_' + newId(), purpose: 'rent', residentId: f.residentId, date: ctx.D.today, amount: f.amount, kind: f.kind, label: f.label.trim(), collectPeriod: f.collectPeriod });
     sheet.close();
     ctx.toast(t('adj.saved'), { action: t('undo'), onAction: () => ctx.remove('adjustments', rec.id), ms: 10000 });
   };
@@ -168,7 +169,7 @@ export function openPeriodCell(ctx, residentId, key) {
     body: h('div', null, rows.length ? h('table.data-table', null, h('tbody', null, rows)) : h('p.muted', null, t('ledger.nothing')),
       me ? h('p', null, t('ledger.cellSum', { total: me.E, paid: me.C })) : null,
       me ? h('p.note', null, t('ledger.cellDue', { previous: me.previous, paid: me.paidSince, due: me.due })) : null),
-    foot: [h('button.btn', { type: 'button', onclick: () => { sheet.close(); openStatement(ctx, { residentId, periodKey: key }); } }, t('st.title')), h('span.sp'),
+    foot: [h('span.sp'),
       h('button.btn.primary', { type: 'button', onclick: () => { sheet.close(); openPayment(ctx, { residentId, periodKey: key }); } }, t('pay.title'))],
   });
 }

@@ -56,13 +56,15 @@ const parts = iso => iso.split('-').map(Number);
 export function date(iso, style = 'medium') {
   if (!iso) return '—';
   const [y, m, d] = parts(iso);
+  if (style === 'iso') return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
   if (style === 'num') return zh() ? `${y}/${m}/${d}` : `${m}/${d}/${y}`;
   if (style === 'short') return zh() ? `${m}月${d}日` : `${MON[m - 1]} ${d}`;
   return zh() ? `${y}年${m}月${d}日` : `${MON[m - 1]} ${d}, ${y}`;
 }
 /** 服务周期：2026/7/31 – 8/31 · Jul 31 – Aug 31, 2026 */
-export function period(a, b) {
+export function period(a, b, style) {
   if (!a || !b) return '—';
+  if (style === 'iso') return `${date(a, 'iso')} – ${date(b, 'iso')}`;
   const [y1, m1, d1] = parts(a), [y2, m2, d2] = parts(b);
   if (zh()) return y1 === y2 ? `${y1}/${m1}/${d1} – ${m2}/${d2}` : `${y1}/${m1}/${d1} – ${y2}/${m2}/${d2}`;
   return y1 === y2 ? `${MON[m1 - 1]} ${d1} – ${MON[m2 - 1]} ${d2}, ${y2}` : `${MON[m1 - 1]} ${d1}, ${y1} – ${MON[m2 - 1]} ${d2}, ${y2}`;

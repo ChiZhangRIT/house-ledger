@@ -6,6 +6,9 @@ import { SyncError } from '../core/sync.js';
 import { periodStart, periodRange, prevPeriod, nextPeriod } from '../core/ledger.js';
 import { addDays } from '../core/dates.js';
 import { SPLIT_CATEGORIES } from '../core/providers.js';
+import { sourceNotes } from './notes.js';
+import { batchDocuments } from './documents.js';
+import { clearBillPdfs } from '../core/documents.js';
 
 export function render(root, ctx) {
   const S = ctx.S, set = (k, v) => ctx.quietly(() => ctx.setSetting(k, v));      // 不重画：免得吞掉下一下点击
@@ -25,16 +28,7 @@ export function render(root, ctx) {
       h('option', { value: '', selected: !S.settings.ledgerStart }, t('set.ledgerNone')),
       keys.map(k => h('option', { value: k, selected: k === S.settings.ledgerStart }, t('period.m', { m: Number(k.slice(5)), y: k.slice(0, 4) }) + ' · ' + period(periodStart(k, L.cd), addDays(periodStart(nextPeriod(k), L.cd), -1))))), t('set.ledgerHint')),
     field(t('set.prorate'), h('select', { onchange: e => set('prorate', e.target.value) },
-      ['daily', 'full'].map(v => h('option', { value: v, selected: (S.settings.prorate || 'daily') === v }, t('set.prorate.' + v))))),
-    field(t('set.payInstructions'), h('textarea', { rows: 2, value: S.settings.payInstructions || '', placeholder: t('set.payPh'), onchange: e => set('payInstructions', e.target.value.trim()) }), t('set.payHint'))));
-
-  // 提醒
-  root.append(section(t('set.alerts'),
-    h('div.field-row', null,
-      field(t('set.anomalyPct'), h('input', { type: 'number', min: 5, max: 500, value: S.settings.anomalyPct || 40, onchange: e => set('anomalyPct', Number(e.target.value) || 40) })),
-      field(t('set.anomalyMin'), h('input', { type: 'number', min: 0, value: S.settings.anomalyMin ?? 20, onchange: e => set('anomalyMin', Math.max(0, Number(e.target.value) || 0)) })),
-      field(t('set.expectLate'), h('input', { type: 'number', min: 0, max: 60, value: S.settings.expectLateDays || 5, onchange: e => set('expectLateDays', Number(e.target.value) || 5) }))),
-    Object.values(S.data.dismissals || {}).some(x => !x.deleted) ? h('button.link-btn', { type: 'button', onclick: () => ctx.batch(() => { for (const x of live(S, 'dismissals')) ctx.remove('dismissals', x.id); }) }, t('set.undismiss')) : null));
+      ['daily', 'full'].map(v => h('option', { value: v, selected: (S.settings.prorate || 'daily') === v }, t('set.prorate.' + v)))))));
 
   // 账单方
   root.append(section(t('set.providers'),
@@ -68,7 +62,8 @@ export function render(root, ctx) {
       h('button.btn', { type: 'button', onclick: () => fileIn.click() }, t('set.import')),
       h('button.btn', { type: 'button', onclick: () => download(`house-ledger-backup-${ctx.D.today}.json`, JSON.stringify({ app: 'house-ledger', kind: 'backup', v: 1, createdAt: new Date().toISOString(), state: ctx.S })) }, t('set.export')),
       h('button.btn.danger', { type: 'button', onclick: () => clearDevice(ctx) }, t('set.clear'))),
-    fileIn));
+    fileIn, batchDocuments(ctx)));
+  const notes = sourceNotes(S); if (notes) root.append(notes);
 
   // 语言与外观
   root.append(section(t('set.look'),
@@ -114,19 +109,21 @@ export async function importFile(ctx, file) {
   const changedSettings = Object.keys(merged.settings).filter(k => canon(merged.settings[k]) !== canon(ctx.S.settings[k]));
   const n = c => Object.values(st.data[c] || {}).filter(x => !x.deleted).length;
   const sheet = openSheet({
-    title: d.kind === 'backup' ? t('imp.backupH') : t('imp.importH'),
+    title: d.kind === 'backup' ? t('imp.backupH') : (d.kind === 'source-notes' ? t('notes.importTitle') : t('imp.importH')),
     body: h('div', null, h('p', null, t('imp.counts', { bills: n('bills'), residents: n('residents'), payments: n('payments'), rents: n('rents') })),
       st.settings.ledgerStart && !ctx.S.settings.ledgerStart ? h('p.note', null, t('imp.ledgerStart', { p: t('period.m', { m: Number(st.settings.ledgerStart.slice(5)), y: st.settings.ledgerStart.slice(0, 4) }) })) : null,
       changedSettings.length ? h('div.check.warn', null, h('span.check-icon', { 'aria-hidden': 'true' }, '⚠'),
         h('div', null, t('imp.settingsChange'), h('ul.small', null, changedSettings.map(k => h('li', null, (SETTING_LABEL[k] ? t(SETTING_LABEL[k]) : k) + t('p.colon') + fmtSetting(ctx.S.settings[k]) + ' → ' + fmtSetting(merged.settings[k])))))) : null,
+      d.kind === 'source-notes' ? h('p', null, t('notes.importCount', { n: n('comments'), periods: n('servicePeriods') })) : null,
       h('p.note', null, t('imp.mergeNote')), ctx.L.sync ? h('p.note', null, t('imp.syncNote')) : null),
     foot: [h('span.sp'), h('button.btn', { type: 'button', onclick: () => sheet.close() }, t('cancel')),
       h('button.btn.primary', { type: 'button', onclick: () => { const before = canon(ctx.S); ctx.mergeIn(st); sheet.close(); toast(canon(ctx.S) === before ? t('imp.nothing') : t('imp.done')); ctx.nav('overview'); } }, t('imp.go'))],
   });
 }
 
-function clearDevice(ctx) {
+async function clearDevice(ctx) {
   if (!confirm(ctx.L.sync ? t('set.clearConfirmSync') : t('set.clearConfirm'))) return;
+  try { await clearBillPdfs(); } catch (e) { toast(t('pdf.clearFail')); return; }
   localStorage.removeItem('hl.state');
   localStorage.removeItem('hl.local');
   location.reload();

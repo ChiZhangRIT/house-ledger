@@ -4,6 +4,8 @@ export const CAT_COLOR = { electricity: 'var(--c-electricity)', gas: 'var(--c-ga
 export const ITEM_COLOR = {
   electric_generation: 'var(--c-generation)', electric_delivery: 'var(--c-electricity)', gas: 'var(--c-gas)',
   water: 'var(--c-water)', garbage: 'var(--c-garbage)', sewer: 'var(--c-sewer)',
+  internet: 'var(--c-internet)', taxes: 'var(--ink-3)', account_charges: 'var(--c-garbage)',
+  partial_charges: 'var(--c-generation)', proration: 'var(--c-generation)', unallocated: 'var(--ink-2)',
 };
 export const ITEM_STACKS = { pge: ['electric_generation', 'electric_delivery', 'gas'], sunnyvale: ['water', 'garbage', 'sewer'] };
 const PROVIDER_CAT = { energy: 'electricity', water: 'water', internet: 'internet' };

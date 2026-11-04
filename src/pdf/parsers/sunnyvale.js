@@ -148,7 +148,9 @@ function collectSections(detail) {
     let ccf = m[2].match(CCF_RE);
     if (!ccf && ONLY_CCF.test(detail[i + 1] || '')) ccf = detail[i + 1].match(CCF_RE);
     if (!ccf && i - 1 >= bodyStart && ONLY_CCF.test(detail[i - 1] || '')) ccf = detail[i - 1].match(CCF_RE);
-    sections.push({ label, key: itemKey(label), cands, ccf: ccf ? num(ccf[1]) : null });
+    const periods = detail.slice(bodyStart, i).map(datesIn).filter(ds => ds.length >= 2);
+    const servicePeriod = periods.length ? { periodStart: periods.map(ds => ds[0]).sort()[0], periodEnd: periods.map(ds => ds[1]).sort().pop() } : null;
+    sections.push({ label, key: itemKey(label), cands, ccf: ccf ? num(ccf[1]) : null, servicePeriod });
     bodyStart = i + 1;
     skipNext = next != null;
   }
@@ -329,6 +331,11 @@ export function parse(lines, text) {
     warnings.push('没找到用水量（CCF）');
   }
 
+  const servicePeriods = {};
+  for (const s of sections) if (s.servicePeriod) {
+    const old = servicePeriods[s.key], p = s.servicePeriod;
+    servicePeriods[s.key] = old ? { periodStart: old.periodStart < p.periodStart ? old.periodStart : p.periodStart, periodEnd: old.periodEnd > p.periodEnd ? old.periodEnd : p.periodEnd } : p;
+  }
   return {
     provider: id,
     statementDate,
@@ -340,5 +347,6 @@ export function parse(lines, text) {
     usage,
     accountLast4,
     warnings,
+    servicePeriods,
   };
 }

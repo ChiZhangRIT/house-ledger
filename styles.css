@@ -378,3 +378,58 @@ body.dragging::after { content: attr(data-drop); position: fixed; inset: 0; z-in
   .card { box-shadow: none; break-inside: avoid; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* 房东工作台：两个主入口；按项目查看图表。 */
+.page-intro { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.page-intro p { margin: 0; max-width: 660px; }
+.utility-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.utility-tabs { overflow-x: auto; max-width: 100%; }
+.utility-charts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.utility-charts > .chart-card { min-width: 0; }
+.utility-history { white-space: nowrap; }
+.field-guide { padding: 12px 16px; border-left: 3px solid var(--accent); background: var(--accent-soft); border-radius: var(--radius-s); }
+.field-guide summary { cursor: pointer; font-size: 13px; }
+.guide-row { margin-top: 12px; }
+.guide-row p { margin: 4px 0 0; }
+.source-note { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.source-note:last-child { border: 0; }
+.comment-text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0; }
+.note-thread .note-thread { margin: 10px 0 0 16px; padding-left: 12px; border-left: 2px solid var(--line); }
+.source-notes .source-notes { padding: 8px; box-shadow: none; }
+@media (min-width: 1440px) { .view, .topbar { max-width: 1380px; } }
+@media (max-width: 719px) {
+  .page-intro { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .page-intro > .row { width: 100%; }
+  .utility-controls { flex-wrap: wrap; }
+  .utility-controls .utility-tabs { width: 100%; }
+  .utility-tabs .seg-tab { padding: 8px 12px; }
+  .latest-grid { grid-template-columns: 1fr; }
+  .latest-card { padding: 12px 14px; }
+  .latest-amt { font-size: 24px; }
+  .person { flex-wrap: wrap; }
+  .person-name { min-width: 140px; }
+  .source-notes { overflow-wrap: anywhere; }
+}
+@media (max-width: 719px) {
+  .latest-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; }
+  .latest-card > b { grid-column: 1; }
+  .latest-card > .latest-amt { grid-column: 2; grid-row: 1 / 3; margin: 0; align-self: center; }
+  .latest-card > .small { grid-column: 1; font-size: 12px; }
+}
+
+/* 长历史图保持每张账单的宽度，用滚动展开时间轴。 */
+.viz-scroll { overflow-x: auto; overscroll-behavior-x: contain; padding-bottom: 4px; }
+.viz-scroll svg { max-width: none; }
+.utility-explanation { margin: 0; padding: 10px 14px; background: var(--accent-soft); border-radius: var(--radius-s); color: var(--accent); font-size: 13px; }
+.history-count { margin-bottom: 12px; }
+.utility-history .date-cell { width: 116px; min-width: 116px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.provider-history { min-width: 0; }
+.utility-history th.date-cell a { color: var(--accent); font-weight: 650; }
+.utility-history td.date-cell { font-weight: 400; }
+.utility-stats .stat-sub { align-items: flex-start; flex-direction: column; }
+.chart-controls { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.yoy-summary { margin: 0; color: var(--ink-2); font-size: 13px; }
+.yoy-summary > span { display: block; margin-top: 4px; }
+.bill-document, .pdf-batch { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+.pdf-pages { min-height: 120px; }
+.pdf-pages canvas { display: block; width: 100%; height: auto; }

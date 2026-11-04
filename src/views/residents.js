@@ -6,7 +6,8 @@ import { personColor } from '../ui/colors.js';
 import { dayNumber, addDays, isISODate, overlapDays } from '../core/dates.js';
 import { newId } from '../core/store.js';
 import { participation, weightOn } from '../core/split.js';
-import { rentOn, buildLedger } from '../core/ledger.js';
+import { rentOn } from '../core/ledger.js';
+import { buildRentLedger } from '../core/rent.js';
 import { SPLIT_CATEGORIES } from '../core/providers.js';
 import { avatar, emptyState } from './parts.js';
 import { parseAmount } from '../ui/parse.js';
@@ -133,9 +134,10 @@ export function openResident(ctx, r) {
         h('label.field', null, h('span.field-label', null, t('res.moveIn')), h('input', { type: 'date', value: w.moveIn || '', oninput: e => { w.moveIn = e.target.value; dirty = true; } })),
         h('label.field', null, h('span.field-label', null, t('res.moveOut')), h('input', { type: 'date', value: w.moveOut || '', oninput: e => { w.moveOut = e.target.value || null; dirty = true; } }), h('span.hint', null, t('res.moveOutHint')))),
       h('label.check-line', null, h('input', { type: 'checkbox', checked: !!w.isOwner, onchange: e => { w.isOwner = e.target.checked; rentBox.hidden = w.isOwner; dirty = true; } }), h('span', null, t('res.isOwner'))),
-      h('fieldset', null, h('legend', null, t('res.weights')), h('p.note', null, t('res.weightsHint')), listEl(w.weights, 'weight', '×1', v => (v === '' ? null : Number(v)))),
-      h('fieldset', null, h('legend', null, t('res.participation')), h('div.field-row', null, SPLIT_CATEGORIES.map(partSel)), h('p.note', null, t('res.partHint'))),
       rentBox,
+      h('details', null, h('summary', null, t('rent.legacyRules')),
+        h('fieldset', null, h('legend', null, t('res.weights')), h('p.note', null, t('res.weightsHint')), listEl(w.weights, 'weight', '×1', v => (v === '' ? null : Number(v)))),
+        h('fieldset', null, h('legend', null, t('res.participation')), h('div.field-row', null, SPLIT_CATEGORIES.map(partSel)), h('p.note', null, t('res.partHint')))),
       h('label.field', null, h('span.field-label', null, t('form.note')), h('textarea', { rows: 2, value: w.note || '', oninput: e => { w.note = e.target.value; dirty = true; } })),
       err),
     foot: [!isNew ? h('button.btn.danger', { type: 'button', onclick: del }, t('bill.delete')) : null, h('span.sp'),
@@ -149,10 +151,10 @@ export function openResident(ctx, r) {
 /** 改住户会让谁的应收变多少（未锁定账单的分摊 + 房租），按人汇总 */
 function impact(ctx, rec) {
   const S = ctx.S;
-  const before = buildLedger(S, ctx.D.today);
+  const before = buildRentLedger(S, ctx.D.today);
   const residents = { ...S.data.residents, [rec.id]: { ...rec, updatedAt: Date.now() } };
   if (rec.isOwner) for (const [id, r] of Object.entries(residents)) if (id !== rec.id && r.isOwner) residents[id] = { ...r, isOwner: false };   // 和 commit() 一样换主租客
-  const after = buildLedger({ ...S, data: { ...S.data, residents } }, ctx.D.today);
+  const after = buildRentLedger({ ...S, data: { ...S.data, residents } }, ctx.D.today);
   const ids = new Set([...Object.keys(before.people), ...Object.keys(after.people)]);
   const out = [];
   for (const id of ids) {

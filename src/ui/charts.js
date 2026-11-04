@@ -1,5 +1,5 @@
 // 自己画的 SVG 图表：柱状图（可堆叠）、折线图、迷你趋势线。
-// 规格（数据可视化规范）：细柱（≤24px，顶端 4px 圆角，底部方角）、堆叠各段和相邻柱之间留 2px 底色空隙；
+// 柱宽默认 ≤24px；账单图按每屏账单数自适应（≤48px）。顶端 4px 圆角、底部方角；堆叠各段留 2px 底色空隙。
 // 折线 2px，末端圆点 r=4 带 2px 底色描边；网格和坐标轴是一像素的实线细线；
 // 两个以上系列一定有图例；悬停/键盘聚焦时一个提示框列出该位置的所有系列；每张图都能切换成表格。
 // 所有名称都用 textContent 写入，不拼 HTML。
@@ -82,6 +82,7 @@ function frame(container, opts, drawPlot, legendKind) {
     }
   }
   const plot = htmlEl('div', 'viz-plot', container);
+  if (opts.visibleCount) plot.classList.add('viz-scroll');
   const table = htmlEl('div', 'viz-table', container);
   table.hidden = true;
   toggle.onclick = () => {
@@ -91,7 +92,15 @@ function frame(container, opts, drawPlot, legendKind) {
     if (on) renderTable(table, opts);
   };
   let lastW = 0;
-  const draw = () => { const w = plot.clientWidth || container.clientWidth || 600; if (w === lastW) return; lastW = w; drawPlot(plot, w); };
+  const draw = () => {
+    const w = plot.clientWidth || container.clientWidth || 600;
+    if (w === lastW) return;
+    lastW = w;
+    const count = Math.max(1, Math.min(opts.labels.length, opts.visibleCount || opts.labels.length));
+    const width = opts.visibleCount ? (w - PAD.left - PAD.right) * opts.labels.length / count + PAD.left + PAD.right : w;
+    drawPlot(plot, width);
+    if (opts.visibleCount) plot.scrollLeft = plot.scrollWidth;
+  };
   draw();
   if (window.ResizeObserver) {
     if (container._ro) container._ro.disconnect();
@@ -125,13 +134,15 @@ const PAD = { top: 10, right: 12, bottom: 26, left: 52 };
 
 /**
  * 柱状图。
- * opts: { labels, longLabels?, series: [{ key, name, color, values }], stacked, format(v), tickFormat(v), height?, title?, onSelect?(i), selected? }
+ * opts: { labels, longLabels?, series: [{ key, name, color, values }], stacked, format(v), tickFormat(v), visibleCount?, height?, title?, onSelect?(i), selected? }
  */
 export function columnChart(container, opts) {
   frame(container, opts, (plot, width) => {
     plot.replaceChildren();
-    const H = opts.height || 220, n = opts.labels.length;
-    const iw = Math.max(40, width - PAD.left - PAD.right), ih = H - PAD.top - PAD.bottom;
+    const n = opts.labels.length, iw = Math.max(40, width - PAD.left - PAD.right), band = iw / Math.max(1, n);
+    const verticalLabels = opts.visibleCount && band < 48;
+    const H = (opts.height || 220) + (verticalLabels ? 38 : 0), bottom = PAD.bottom + (verticalLabels ? 38 : 0);
+    const ih = H - PAD.top - bottom;
     let max = 0, min = 0;
     for (let i = 0; i < n; i++) {
       let pos = 0, neg = 0;
@@ -143,10 +154,13 @@ export function columnChart(container, opts) {
     const svg = svgEl('svg', { width, height: H, viewBox: `0 0 ${width} ${H}`, role: 'img', 'aria-label': opts.ariaLabel || opts.title || '' }, plot);
     for (const tv of ticks) {
       svgEl('line', { x1: PAD.left, x2: PAD.left + iw, y1: Y(tv), y2: Y(tv), class: tv === 0 ? 'viz-base' : 'viz-grid' }, svg);
-      svgEl('text', { x: PAD.left - 6, y: Y(tv) + 4, 'text-anchor': 'end', class: 'viz-tick' }, svg).textContent = opts.tickFormat(tv);
+      if (!opts.visibleCount) svgEl('text', { x: PAD.left - 6, y: Y(tv) + 4, 'text-anchor': 'end', class: 'viz-tick' }, svg).textContent = opts.tickFormat(tv);
     }
-    const band = iw / Math.max(1, n), barW = Math.max(3, Math.min(24, band - 2, opts.stacked ? band * 0.62 : band * 0.8 / opts.series.length));
-    const labelEvery = Math.max(1, Math.ceil(n / Math.floor(iw / 46)));
+    const slots = opts.stacked ? 1 : opts.series.length;
+    const gap = opts.visibleCount && band >= 48 ? 4 : 2;
+    const barW = opts.visibleCount ? Math.max(1, Math.min(48, (band * 2 / 3 - (slots - 1) * gap) / slots))
+      : Math.max(3, Math.min(24, band - 2, opts.stacked ? band * 0.62 : band * 0.8 / opts.series.length));
+    const labelEvery = opts.visibleCount ? 1 : Math.max(1, Math.ceil(n / Math.max(1, Math.floor(iw / 46))));
     const groups = [];
     for (let i = 0; i < n; i++) {
       const cx = PAD.left + band * i + band / 2;
@@ -159,10 +173,14 @@ export function columnChart(container, opts) {
         pos.forEach((x, k) => { drawBar(g, cx - barW / 2, Y(up + x.v), barW, Y(up) - Y(up + x.v), x.s.color, k === pos.length - 1 ? 'top' : 'none', k > 0); up += x.v; });
         neg.forEach((x, k) => { drawBar(g, cx - barW / 2, Y(down), barW, Y(down + x.v) - Y(down), x.s.color, k === neg.length - 1 ? 'bottom' : 'none', k > 0, true); down += x.v; });
       } else {
-        const w = barW, off = (segs.length * (w + 2) - 2) / 2;
-        segs.forEach((x, k) => { const v = x.v; drawBar(g, cx - off + k * (w + 2), Y(Math.max(0, v)), w, Math.abs(Y(v) - Y(0)), x.s.color, v >= 0 ? 'top' : 'bottom', false); });
+        const w = barW, off = (segs.length * (w + gap) - gap) / 2;
+        segs.forEach((x, k) => { const v = x.v; drawBar(g, cx - off + k * (w + gap), Y(Math.max(0, v)), w, Math.abs(Y(v) - Y(0)), x.s.color, v >= 0 ? 'top' : 'bottom', false); });
       }
-      if (i % labelEvery === 0) svgEl('text', { x: cx, y: H - 8, 'text-anchor': 'middle', class: 'viz-tick' }, svg).textContent = opts.labels[i];
+      if (i % labelEvery === 0) {
+        const y = verticalLabels ? H - bottom + 8 : H - 8;
+        svgEl('text', { x: cx, y, 'text-anchor': verticalLabels ? 'end' : 'middle',
+          transform: verticalLabels ? `rotate(-90,${cx},${y})` : null, class: 'viz-tick' }, svg).textContent = opts.labels[i];
+      }
       // 命中区域：整条竖带，比柱子宽
       const hit = svgEl('rect', { x: PAD.left + band * i, y: PAD.top, width: band, height: ih, class: 'viz-hit', tabindex: '0', role: 'button',
         'aria-label': `${opts.longLabels ? opts.longLabels[i] : opts.labels[i]}` }, svg);
@@ -183,6 +201,13 @@ export function columnChart(container, opts) {
         if ((e.key === 'Enter' || e.key === ' ') && opts.onSelect) { e.preventDefault(); opts.onSelect(i); }
       });
       if (opts.onSelect) hit.addEventListener('click', () => opts.onSelect(i));
+    }
+    if (opts.visibleCount) {
+      const axis = svgEl('g', { class: 'viz-y-axis', 'aria-hidden': 'true', 'pointer-events': 'none' }, svg);
+      svgEl('rect', { width: PAD.left, height: H, fill: 'var(--surface)' }, axis);
+      for (const tv of ticks) svgEl('text', { x: PAD.left - 6, y: Y(tv) + 4, 'text-anchor': 'end', class: 'viz-tick' }, axis).textContent = opts.tickFormat(tv);
+      plot.onscroll = () => axis.setAttribute('transform', `translate(${plot.scrollLeft},0)`);
+      plot.onscroll();
     }
   }, 'bar');
 }

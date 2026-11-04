@@ -1,7 +1,7 @@
 // 数据层：所有数据都是「集合 → 记录」，每条记录有 id、updatedAt（毫秒时间戳），删除时留一个 deleted 标记。
 // 多台设备合并时逐条比较 updatedAt，取较新的一份；时间相同但内容不同时按内容排序取一份，保证每台设备结果一样。
 
-export const COLLECTIONS = ['providers', 'residents', 'bills', 'payments', 'rents', 'adjustments', 'exports', 'dismissals'];
+export const COLLECTIONS = ['providers', 'residents', 'bills', 'payments', 'rents', 'adjustments', 'exports', 'dismissals', 'comments', 'servicePeriods'];
 // 不认识的集合（以后的版本新加的）也原样保留、照样合并，旧版 app 同步时不会把它们弄丢
 const collectionsOf = (...states) => [...new Set([...COLLECTIONS, ...states.flatMap(s => Object.keys((s && s.data) || {}))])].filter(c => safeKey(c));
 const own = (o, k) => (o && Object.prototype.hasOwnProperty.call(o, k) ? o[k] : undefined);

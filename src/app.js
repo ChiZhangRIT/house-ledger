@@ -1,27 +1,21 @@
 // 合租账本：启动、数据、路由、同步。各页面在 views/ 里，计算在 core/ 里。
 import { normalizeState, mergeStates, stamp, live, canon } from './core/store.js';
 import { createSync } from './core/sync.js';
-import { monthlyCosts, monthlyUsage } from './core/analytics.js';
-import { buildLedger } from './core/ledger.js';
-import { alerts } from './core/alerts.js';
+import { buildRentLedger } from './core/rent.js';
 import { today } from './core/dates.js';
 import { t, setLang, getLang, LANGS } from './i18n.js';
 import { h, $, toast } from './ui/dom.js';
-import * as overview from './views/overview.js';
 import * as bills from './views/bills.js';
 import * as billDetail from './views/billDetail.js';
-import * as analysis from './views/analysis.js';
-import * as collect from './views/collect.js';
-import * as residents from './views/residents.js';
+import * as tenants from './views/tenants.js';
 import * as person from './views/person.js';
 import * as settings from './views/settings.js';
 import { openAdd, addFiles } from './views/add.js';
 
 const KEY = 'hl.state', LKEY = 'hl.local';
-const VIEWS = { overview, bills, bill: billDetail, analysis, collect, person, residents, settings };
+const VIEWS = { bills, bill: billDetail, tenants, person, settings };
 const NAV = [
-  { id: 'overview', icon: '◎' }, { id: 'bills', icon: '☰' }, { id: 'analysis', icon: '▥' },
-  { id: 'collect', icon: '$' }, { id: 'residents', icon: '⌂' }, { id: 'settings', icon: '⚙' },
+  { id: 'bills', icon: '▥' }, { id: 'tenants', icon: '⌂' },
 ];
 const DEVICE = /iPad/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ? 'iPad'
   : /iPhone|iPod/.test(navigator.userAgent) ? 'iPhone' : /Mac/.test(navigator.platform) ? 'Mac' : 'Browser';
@@ -90,14 +84,11 @@ function derived() {
   cache = {
     today: todayIso, providers, bills: allBills, residents: res,
     providerList: live(S, 'providers'),
-    monthly: monthlyCosts(allBills, providers),
-    usage: monthlyUsage(allBills),
-    payments: live(S, 'payments').sort((a, b) => (a.date < b.date ? 1 : -1)),
+    payments: live(S, 'payments').filter(p => p.purpose === 'rent').sort((a, b) => (a.date < b.date ? 1 : -1)),
   };
-  cache.ledger = buildLedger(S, todayIso, cache);
+  cache.ledger = buildRentLedger(S, todayIso);
   /** 同一类别的账单（网费换过公司也算一类），对比用 */
   cache.sameCategory = (b) => { const c = (providers[b.providerId] || {}).category; return allBills.filter(x => (providers[x.providerId] || {}).category === c); };
-  cache.alerts = alerts(S, cache);
   return cache;
 }
 
@@ -105,7 +96,8 @@ function derived() {
 function route() {
   const dec = s => { try { return decodeURIComponent(s); } catch (e) { return s; } };   // 截断的链接（%E0）不要让整个 app 白屏
   const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean).map(dec);
-  const name = Object.prototype.hasOwnProperty.call(VIEWS, parts[0]) ? parts[0] : 'overview';
+  const aliases = { overview: 'bills', analysis: 'bills', residents: 'tenants', collect: 'tenants' };
+  const name = aliases[parts[0]] || (Object.prototype.hasOwnProperty.call(VIEWS, parts[0]) ? parts[0] : 'bills');
   return { name, params: parts.slice(1) };
 }
 const nav = (path) => { const target = '#/' + path; if (location.hash === target) render(); else location.hash = target; };
@@ -127,19 +119,15 @@ function renderShell() {
   const tabsEl = document.getElementById('tabs'); if (tabsEl) tabsEl.setAttribute('aria-label', t('nav.label'));
   const side = $('#side'), tabs = $('#tabs');
   const r0 = route().name;
-  const cur = r0 === 'bill' ? 'bills' : r0 === 'person' ? 'collect' : r0;
+  const cur = r0 === 'bill' ? 'bills' : r0 === 'person' ? 'tenants' : r0;
   side.replaceChildren(
     h('div.brand', null, h('img', { src: 'icons/icon-180.png', alt: '', width: 32, height: 32 }),
       h('div', null, h('b', null, t('app.name')), S.settings.propertyName ? h('small', null, S.settings.propertyName) : null)),
-    h('button.btn.primary.add-btn', { type: 'button', onclick: () => ctx.openAdd() }, '＋ ' + t('nav.add')),
     h('nav', { 'aria-label': t('nav.label') }, NAV.map(n => h('a.nav-item' + (cur === n.id ? '.on' : ''), { href: '#/' + n.id, 'aria-current': cur === n.id ? 'page' : null },
       h('span.nav-icon', { 'aria-hidden': 'true' }, n.icon), t('nav.' + n.id)))),
-    h('div.side-foot', null, syncBadge()),
+    h('div.side-foot', null, h('a.nav-item', { href: '#/settings' }, '⚙ ' + t('nav.settings')), h('div.sync-status', null, syncBadge())),
   );
-  const TAB = ['overview', 'bills', 'add', 'analysis', 'collect'];
-  tabs.replaceChildren(...TAB.map(id => id === 'add'
-    ? h('button.tab.tab-add', { type: 'button', 'aria-label': t('nav.add'), onclick: () => ctx.openAdd() }, h('span', null, '＋'))
-    : h('a.tab' + (cur === id ? '.on' : ''), { href: '#/' + id }, h('span.nav-icon', { 'aria-hidden': 'true' }, NAV.find(n => n.id === id).icon), h('span', null, t('nav.' + id)))));
+  tabs.replaceChildren(...NAV.map(n => h('a.tab' + (cur === n.id ? '.on' : ''), { href: '#/' + n.id, 'aria-current': cur === n.id ? 'page' : null }, h('span.nav-icon', { 'aria-hidden': 'true' }, n.icon), h('span', null, t('nav.' + n.id)))));
 }
 
 function syncBadge() {
@@ -154,7 +142,7 @@ function syncBadge() {
   return h('a.sync-badge.' + cls, { href: '#/settings', title: s && s.err ? t('syncErr.' + s.err.code, s.err.vars) : '' }, h('span.dot', { 'aria-hidden': 'true' }), text);
 }
 function renderSyncBadge() {
-  const foot = $('#side .side-foot'); if (foot) foot.replaceChildren(syncBadge());
+  const foot = $('#side .sync-status'); if (foot) foot.replaceChildren(syncBadge());
   const top = $('#topSync'); if (top) top.replaceChildren(syncBadge());
 }
 
@@ -168,10 +156,9 @@ function render() {
   const keep = sameView ? main.scrollTop : 0;
   main.dataset.view = name + '/' + params.join('/');
   main.replaceChildren();
-  const top = h('div.topbar', null, h('h1', null, name === 'bill' ? t('nav.bills') : name === 'person' ? t('nav.collect') : t('nav.' + name)),
+  const top = h('div.topbar', null, h('h1', null, name === 'bill' ? t('nav.bills') : name === 'person' ? t('nav.tenants') : t('nav.' + name)),
     h('span.sp'), h('div', { id: 'topSync' }, syncBadge()),
-    h('a.icon-btn.top-more', { href: '#/settings', 'aria-label': t('nav.settings') }, '⚙'),
-    name !== 'residents' ? h('a.icon-btn.top-more', { href: '#/residents', 'aria-label': t('nav.residents') }, '⌂') : null);
+    h('a.icon-btn.top-more', { href: '#/settings', 'aria-label': t('nav.settings') }, '⚙'));
   main.append(top);
   const body = h('div.view.view-' + name);
   main.append(body);
@@ -186,7 +173,7 @@ function render() {
         L.sync ? h('button.btn', { type: 'button', onclick: () => ctx.sync.stop() }, t('set.stopSync')) : null,
         h('button.btn.danger', { type: 'button', onclick: () => { if (confirm(t('set.clearConfirm'))) { localStorage.removeItem(KEY); location.reload(); } } }, t('set.clear')))));
   }
-  if (keep) main.scrollTop = keep;
+  main.scrollTop = keep;
   if (focusKey) { const el = document.querySelector(`[data-fid="${CSS.escape(focusKey)}"]`); if (el) el.focus({ preventScroll: true }); }
   else if (!sameView && !document.querySelector('dialog[open]') && main.contains(active) === false && active !== document.body) main.focus({ preventScroll: true });   // 换页后读屏、键盘从新页面开始
 }

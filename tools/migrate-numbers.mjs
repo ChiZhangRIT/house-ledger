@@ -14,6 +14,7 @@
 // - 开账期 ledgerStart = 房租表里最后一个打过勾的期的下一期：之后的房租和新账单在 app 里收。
 import fs from 'node:fs';
 import path from 'node:path';
+import { notesImport } from '../src/core/sourceNotes.js';
 
 const [dumpPath, outPath, extractDir, configPath] = process.argv.slice(2);
 if (!dumpPath || !outPath) { console.error('usage: node tools/migrate-numbers.mjs <dump.json> <out.json> [extractDir] [config.private.json]'); process.exit(1); }
@@ -122,6 +123,7 @@ for (const row of util.slice(5)) {
     ...(PROVIDERS[prov].periodConvention === 'inclusive' ? { endInclusive: true } : {}),
     dueDate: ex ? ex.draft.dueDate || null : null, total, items,
     usage: ex ? ex.draft.usage || [] : [],
+    itemPeriods: ex ? ex.draft.servicePeriods || {} : {},
     allocation: { mode: 'locked', shares },
     source: { method: 'import', file: ex ? path.basename(ex.file) : null },
     note: '',
@@ -166,6 +168,7 @@ state.settings = { rentCycleDay: 16, currency: 'USD', graceDays: 3, prorate: 'da
 if (config.propertyName) state.settings.propertyName = config.propertyName;
 if (lastPaid) state.settings.ledgerStart = lastPaid;
 state.settingsAt = Object.fromEntries(Object.keys(state.settings).map(k => [k, IMPORTED]));
+state.data.comments = notesImport(dump, state).data.comments;
 fs.writeFileSync(outPath, JSON.stringify({ app: 'house-ledger', kind: 'import', v: 1, createdAt: new Date().toISOString(), state }, null, 1));
 const count = c => Object.keys(state.data[c]).length;
 console.log(`residents ${count('residents')}, providers ${count('providers')}, bills ${count('bills')}, rent records ${count('rents')}`);

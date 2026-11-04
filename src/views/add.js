@@ -1,5 +1,5 @@
 // 添加账单：选 PDF（可多选）/ 拖进窗口 → 在本机读出文字 → 认出是哪家 → 解析成草稿 → 逐张确认。
-// 读不出来（扫描件、加密、不认识的公司）时可以粘贴文字再识别，或者手动录入。PDF 不上传、不保存。
+// 读不出来时可以粘贴文字或手动录入。确认保存账单后，PDF 副本关联到当前设备上的记录。
 import { h, openSheet, toast } from '../ui/dom.js';
 import { t, period, money } from '../i18n.js';
 import { providerColor } from '../ui/colors.js';
@@ -51,19 +51,19 @@ export async function addFiles(ctx, files) {
       setRow(r, 'fail', t('add.fail.' + r.result.reason));
     }
     if (r.status === 'fail') r.el.append(h('span.file-actions', null,
-      h('button.link-btn', { type: 'button', onclick: () => { sheet.close(); openPaste(ctx); } }, t('add.paste')),
-      h('button.link-btn', { type: 'button', onclick: () => { sheet.close(); chooseManual(ctx, r.file.name); } }, t('add.manualShort'))));
+      h('button.link-btn', { type: 'button', onclick: () => { sheet.close(); openPaste(ctx, r.file); } }, t('add.paste')),
+      h('button.link-btn', { type: 'button', onclick: () => { sheet.close(); chooseManual(ctx, r.file); } }, t('add.manualShort'))));
   }
   const ok = rows.filter(r => r.status === 'ok').sort((a, b) => (a.result.draft.periodStart || '').localeCompare(b.result.draft.periodStart || ''));
   if (!ok.length) return;
-  const start = () => { sheet.close(); runQueue(ctx, ok.map(r => draftToBill(ctx, r.result.draft, r.src))); };
+  const start = () => { sheet.close(); runQueue(ctx, ok.map(r => ({ draft: draftToBill(ctx, r.result.draft, r.src), file: r.file }))); };
   if (ok.length === rows.length) { setTimeout(start, ok.length === 1 ? 250 : 600); return; }
   actions.replaceChildren(h('button.btn.primary', { type: 'button', onclick: start }, t('add.confirmN', { n: ok.length })));
 }
 
 function runQueue(ctx, drafts, i = 0) {
   if (i >= drafts.length) return;
-  openBillForm(ctx, { draft: drafts[i], queue: { i, n: drafts.length }, onDone: ({ saved, skipped }) => { if (saved || skipped) runQueue(ctx, drafts, i + 1); } });
+  openBillForm(ctx, { draft: drafts[i].draft, pdfFile: drafts[i].file, queue: { i, n: drafts.length }, onDone: ({ saved, skipped }) => { if (saved || skipped) runQueue(ctx, drafts, i + 1); } });
 }
 
 function setRow(r, status, content) {
@@ -74,7 +74,7 @@ function setRow(r, status, content) {
 const providerName = (ctx, key) => { const p = ctx.S.data.providers['p_' + key]; return p && !p.deleted ? p.name : key; };
 
 /** 粘贴账单文字（比如从「预览」里复制，或者用 iPhone 的实况文本从照片里复制），走同一套解析 */
-function openPaste(ctx) {
+function openPaste(ctx, pdfFile = null) {
   const ta = h('textarea.paste', { rows: 10, placeholder: t('add.pastePh') });
   const err = h('p.err', { hidden: true });
   const sheet = openSheet({
@@ -85,16 +85,17 @@ function openPaste(ctx) {
         const res = parseBillLines(lines);
         if (!res.ok) { err.textContent = t('add.fail.' + res.reason); err.hidden = false; return; }
         sheet.close();
-        openBillForm(ctx, { draft: draftToBill(ctx, res.draft, { method: 'paste' }) });
+        openBillForm(ctx, { draft: draftToBill(ctx, res.draft, { method: 'paste', file: pdfFile?.name }), pdfFile });
       } }, t('add.recognize'))],
   });
   setTimeout(() => ta.focus(), 50);
 }
 
 /** 识别失败后手动录入：按文件名猜一下是哪家 */
-function chooseManual(ctx, fileName = '') {
+function chooseManual(ctx, file) {
+  const fileName = file.name;
   const n = fileName.toLowerCase();
   const guess = /pg.?e|pge/.test(n) ? 'p_pge' : /sunnyvale|water|utility/.test(n) ? 'p_sunnyvale' : /att|at&t/.test(n) ? 'p_att' : /xfinity|comcast/.test(n) ? 'p_xfinity' : null;
-  if (guess) { const d = manualDraft(ctx, guess); d.source.file = fileName || null; openBillForm(ctx, { draft: d }); return; }
+  if (guess) { const d = manualDraft(ctx, guess); d.source.file = fileName || null; openBillForm(ctx, { draft: d, pdfFile: file }); return; }
   openAdd(ctx);
 }
