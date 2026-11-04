@@ -159,14 +159,19 @@ function openSync(ctx) {
       fail(t('syncErr.' + (e instanceof SyncError ? e.code : 'unknown'), e.vars || {}));
     } finally { btn.disabled = false; btn.textContent = t('sync.connect'); }
   } }, t('sync.connect'));
-  const steps = h('ol.steps.small');
-  for (let n = 1; n <= 9; n++) steps.append(h('li', null, t('sync.step' + n),
-    n === 2 ? h('p', null, h('a', { href: 'https://github.com/settings/personal-access-tokens/new', target: '_blank', rel: 'noopener' }, t('sync.tokenLink'))) : null));
+  const tokenSteps = h('ul.steps');
+  for (let n = 3; n <= 8; n++) tokenSteps.append(h('li', null, t('sync.step' + n)));
+  const steps = h('ol.steps.small', null,
+    h('li', null, t('sync.step1')),
+    h('li', null, t('sync.step2'),
+      h('p', null, h('a', { href: 'https://github.com/settings/personal-access-tokens/new', target: '_blank', rel: 'noopener' }, t('sync.tokenLink'))),
+      h('details', null, h('summary', null, t('sync.tokenStepsH')), h('p', null, t('sync.tokenPath')), tokenSteps,
+        h('p', null, t('sync.tokenExpiry')), h('p', null, h('a', { href: 'https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token', target: '_blank', rel: 'noopener' }, t('sync.tokenDocs'))))),
+    h('li', null, t('sync.step9')));
   const sheet = openSheet({
     title: t('set.syncSetup'),
     body: h('div.form', null, h('p.muted.small', null, t('sync.intro')), h('p.small', null, t('sync.have')),
-      h('details.small', null, h('summary', null, t('sync.stepsH')), steps,
-        h('p', null, t('sync.tokenExpiry')), h('p', null, h('a', { href: 'https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token', target: '_blank', rel: 'noopener' }, t('sync.tokenDocs')))),
+      h('details.small', null, h('summary', null, t('sync.stepsH')), steps),
       field(t('sync.repo'), repoIn), field(t('sync.token'), tokIn), err),
     foot: [h('span.sp'), h('button.btn', { type: 'button', onclick: () => sheet.close() }, t('cancel')), btn],
   });
