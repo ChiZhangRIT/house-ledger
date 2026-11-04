@@ -24,7 +24,8 @@ export function render(root, ctx) {
   const daily = prefs.utilityMetric === 'daily';
   const rows = range === 'all' ? all : all.slice(-Number(range));
   const set = (k, v) => { ctx.setPref(k, v); ctx.render(); };
-  root.append(h('div.utility-controls', null,
+  root.append(h('section.card.utility-controls', null,
+    h('h2.section-h', null, t('u.browse')),
     h('div.seg-tabs.utility-tabs', { role: 'tablist', 'aria-label': t('u.choose') }, UTILITIES.map(k =>
       h('button.seg-tab' + (key === k ? '.on' : ''), { type: 'button', role: 'tab', 'aria-selected': String(key === k), onclick: () => set('utility', k) }, t(k === 'electricity' ? 'u.electricityTab' : 'u.' + k))))));
   if (!rows.length) { root.append(emptyState(t('an.noData'))); return; }
