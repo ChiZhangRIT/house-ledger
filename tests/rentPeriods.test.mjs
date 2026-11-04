@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { blankState } from '../src/core/store.js';
-import { scheduledPeriods, rentDates, validateRentPeriod, validateSchedules } from '../src/core/rentPeriods.js';
+import { scheduledPeriods, rentDates, validateRentPeriod, validateSchedules, rentTrackingStart } from '../src/core/rentPeriods.js';
 import { buildRentLedger } from '../src/core/rent.js';
 
 function fixture() {
@@ -133,4 +133,53 @@ test('首期跨月截短时，交租月份以实际覆盖开始月为准，与�
   const r = s.data.residents.b;
   const first = scheduledPeriods(s,r,'2026-01-10')[0];
   assert.deepEqual([first.periodStart,first.periodEnd,first.dueDate],['2026-01-01','2026-01-15','2026-01-10']);
+});
+
+test('每位住户分别按完整日期开始跟踪，跨月租期不受全屋月份限制', () => {
+  const s = fixture();
+  s.data.residents.a.rentTrackingStart = '2026-10-01';
+  s.data.residents.b.rentTrackingStart = '2026-09-16';
+  const a = scheduledPeriods(s, s.data.residents.a, '2026-10-18')[0];
+  const b = scheduledPeriods(s, s.data.residents.b, '2026-10-18')[0];
+  assert.deepEqual([a.periodStart, b.periodStart, b.periodEnd], ['2026-10-01', '2026-09-16', '2026-10-15']);
+  delete s.settings.ledgerStart;
+  assert.equal(buildRentLedger(s, '2026-10-18').people.a.balance, 1000);
+  assert.equal(buildRentLedger(s, '2026-10-18').people.b.balance, 2000);
+  const rec = { id: 'custom', residentId: 'b', history: true, datesConfirmed: true, periodStart: '2026-09-01', periodEnd: '2026-09-15', dueDate: '2026-09-01' };
+  assert.equal(validateRentPeriod(s, rec), null);
+  assert.equal(validateRentPeriod(s, { ...rec, periodEnd: '2026-09-16' }), 'overlap');
+  assert.equal(validateRentPeriod(s, { ...rec, periodStart: '2026-09-16', periodEnd: '2026-10-15' }), 'activePeriod');
+  assert.equal(validateRentPeriod(s, { ...rec, history: false }), 'beforeLedger');
+});
+
+test('跟踪日不截短原租期；留空不回退到全屋开账月份，也不影响其他住户', () => {
+  const s = fixture(), r = s.data.residents.b;
+  r.rentTrackingStart = '2026-10-10';
+  assert.equal(scheduledPeriods(s, r, '2026-10-18')[0].periodStart, '2026-10-16');
+  r.rentTrackingStart = null;
+  assert.equal(rentTrackingStart(s, r), null);
+  assert.deepEqual(scheduledPeriods(s, r, '2026-10-18'), []);
+  assert.equal(buildRentLedger(s, '2026-10-18').people.b.balance, 0);
+  assert.equal(scheduledPeriods(s, s.data.residents.a, '2026-10-18')[0].periodStart, '2026-10-01');
+  assert.equal(validateSchedules(s, { ...r, rentTrackingStart: '2026-02-30' }, r), 'trackingDate');
+});
+
+test('修改跟踪日保留已确认应收、收款和历史记录，不把历史补记再次算成欠款', () => {
+  const s = fixture(), r = s.data.residents.b;
+  const saved = { ...scheduledPeriods(s, r, '2026-10-18')[0], amount: 1000 };
+  s.data.rents[saved.id] = saved;
+  s.data.payments.p = { id: 'p', purpose: 'rent', residentId: 'b', rentId: saved.id, date: '2026-10-17', amount: 400 };
+  const old = { id: 'old', residentId: 'b', history: true, datesConfirmed: true, periodStart: '2026-09-16', periodEnd: '2026-10-15', dueDate: '2026-09-10', paid: true, receivedAmount: 1000, paidDate: '2026-09-10' };
+  s.data.rents.old = old;
+  r.rentTrackingStart = '2026-09-16';
+  assert.equal(scheduledPeriods(s, r, '2026-10-18').some(x => x.periodStart === old.periodStart), false);
+  assert.equal(buildRentLedger(s, '2026-10-18').people.b.balance, 600);
+  assert.equal(validateRentPeriod(s, old), null);
+  r.rentTrackingStart = '2026-11-16';
+  assert.equal(buildRentLedger(s, '2026-10-18').people.b.balance, 600);
+  assert.equal(validateRentPeriod(s, { ...saved, amount: 900 }), null);
+  r.rentTrackingStart = null;
+  assert.equal(buildRentLedger(s, '2026-10-18').people.b.balance, 600);
+  assert.equal(s.data.rents.old, old);
+  assert.equal(s.data.payments.p.rentId, saved.id);
 });

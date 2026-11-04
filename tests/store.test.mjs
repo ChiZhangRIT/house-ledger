@@ -84,6 +84,31 @@ test('normalize drops broken records and is stable', () => {
   assert.equal(canon(normalizeState(s)), canon(s));
 });
 
+test('旧开账月份转为住户各自的跟踪日期，保留金额、历史与修改时间且可重复读入', () => {
+  const s = blankState(); s.settings.ledgerStart = '2026-10';
+  for (const [id, extra] of [['legacy', {}], ['individual', { rentTrackingStart: '2026-09-16' }], ['off', { rentTrackingStart: null }]]) {
+    s.data.residents[id] = { id, name: id, moveIn: '2025-01-01', rent: [{ from: '2025-01-01', amount: 1000 }], updatedAt: 50, ...extra };
+  }
+  s.data.rents.old = { id: 'old', residentId: 'legacy', periodStart: '2026-09-01', paid: true, receivedAmount: 900, updatedAt: 20 };
+  const migrated = normalizeState(s);
+  assert.equal(migrated.data.residents.legacy.rentTrackingStart, '2026-10-01');
+  assert.equal(migrated.data.residents.individual.rentTrackingStart, '2026-09-16');
+  assert.equal(migrated.data.residents.off.rentTrackingStart, null);
+  assert.equal(migrated.data.residents.legacy.updatedAt, 50);
+  assert.deepEqual(migrated.data.residents.legacy.rent, s.data.residents.legacy.rent);
+  assert.equal(migrated.data.rents.old.receivedAmount, 900);
+  migrated.settings.ledgerStart = '2026-12';
+  assert.equal(normalizeState(migrated).data.residents.legacy.rentTrackingStart, '2026-10-01');
+  assert.equal(canon(normalizeState(migrated)), canon(migrated));
+  const edited = structuredClone(migrated);
+  edited.data.residents.legacy = stamp({ ...edited.data.residents.legacy, rentTrackingStart: '2026-09-16' }, edited.data.residents.legacy, 60);
+  for (const merged of [mergeStates(edited, normalizeState(s)), mergeStates(normalizeState(s), edited)]) {
+    assert.equal(normalizeState(merged).data.residents.legacy.rentTrackingStart, '2026-09-16');
+  }
+  delete s.settings.ledgerStart;
+  assert.equal(normalizeState(s).data.residents.legacy.rentTrackingStart, null);
+});
+
 test('stamp is always newer than the previous version', () => {
   const prev = { id: 'x', updatedAt: 5000 };
   assert.equal(stamp({ id: 'x' }, prev, 1000).updatedAt, 5001);

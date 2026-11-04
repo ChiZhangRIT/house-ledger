@@ -9,6 +9,7 @@ import { openResident } from './residents.js';
 import { sourceNotes } from './notes.js';
 import { historySection, openRentPeriod, rentRange } from './rentHistory.js';
 import { rentPeriodsFor } from '../core/rent.js';
+import { rentTrackingStart } from '../core/rentPeriods.js';
 
 export function render(root, ctx, [id]) {
   const D = ctx.D, r = ctx.S.data.residents[id];
@@ -24,8 +25,10 @@ export function render(root, ctx, [id]) {
   const notes = sourceNotes(ctx.S, 'residents', id, false); if (notes) root.append(h('section.card', null, notes));
   if (p) {
     const periods = rentPeriodsFor(ctx.S, id, D.today);
+    const trackingStart = rentTrackingStart(ctx.S, r);
     root.append(h('section.card', null, h('div.row', null, h('h2.section-h', null, t('rent.account')), h('span.sp'),
       h('button.btn', { type: 'button', onclick: () => openRentPeriod(ctx, id) }, '＋ ' + t('rent.customPeriod'))),
+      h('p.note', null, trackingStart ? t('rent.trackingSince', { date: date(trackingStart, 'iso') }) : t('rent.trackingSetup')),
       h('p.note', null, t('rent.periodHint')),
       periods.length ? h('div.table-scroll', null, h('table.data-table.rent-table', null,
         h('thead', null, h('tr', null, ['rent.dueDate', 'rent.start', 'rent.end', 'ledger.charge', 'ledger.paid', 'collect.periodLeft', ''].map(k => h('th', null, k ? t(k) : '')))),

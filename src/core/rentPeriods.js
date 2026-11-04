@@ -27,7 +27,14 @@ export function rentOverlap(a, b) {
 export const validSchedule = s => isISODate(s.from) && Number.isInteger(s.cycleDay) && s.cycleDay >= 1 && s.cycleDay <= 31
   && Number.isInteger(s.dueDay) && s.dueDay >= 1 && s.dueDay <= 31 && [-1, 0, 1].includes(s.dueMonthOffset);
 
+/** 缺少新字段的旧记录沿用原界线；明确留空表示不自动跟踪。 */
+export function rentTrackingStart(state, resident) {
+  const start = resident.rentTrackingStart === undefined ? state.settings.ledgerStart && state.settings.ledgerStart + '-01' : resident.rentTrackingStart;
+  return isISODate(start) ? start : null;
+}
+
 export function validateSchedules(state, resident, previous) {
+  if (resident.rentTrackingStart != null && !isISODate(resident.rentTrackingStart)) return 'trackingDate';
   const schedules = resident.rentSchedules || [];
   if (schedules.some(s => !validSchedule(s))) return 'invalid';
   if (new Set(schedules.map(s => s.from)).size !== schedules.length) return 'duplicate';
@@ -41,9 +48,9 @@ export function validateSchedules(state, resident, previous) {
 /** 每位住户自己的约定。先生成候选，再由已保存的租期快照覆盖。 */
 export function scheduledPeriods(state, resident, today, future = 2) {
   const terms = (resident.rentSchedules || []).filter(validSchedule).sort((a, b) => a.from.localeCompare(b.from));
-  const stop = monthAfter(today, future), cutoff = state.settings.ledgerStart ? state.settings.ledgerStart + '-01' : null;
+  const stop = monthAfter(today, future), cutoff = rentTrackingStart(state, resident);
   if (!cutoff) return [];
-  const saved = Object.values(state.data.rents).filter(r => !r.deleted && !isHistory(r) && r.residentId === resident.id && completeRentDates(r));
+  const saved = Object.values(state.data.rents).filter(r => !r.deleted && r.residentId === resident.id);
   const out = [];
   terms.forEach((term, i) => {
     let key = term.from.slice(0, 7);
@@ -71,9 +78,12 @@ export function validateRentPeriod(state, rec) {
   if (d.periodStart && d.periodEnd && d.periodEnd < d.periodStart) return 'range';
   if (!isHistory(rec) && !completeRentDates(rec)) return 'required';
   if (isHistory(rec) && !d.periodStart && !d.dueDate && !d.legacyDate && !isISODate(rec.paidDate)) return 'required';
-  if (!isHistory(rec) && d.periodStart && state.settings.ledgerStart && d.periodStart < state.settings.ledgerStart + '-01') return 'beforeLedger';
-  if (isHistory(rec) && d.periodStart && state.settings.ledgerStart && d.periodStart >= state.settings.ledgerStart + '-01') return 'activePeriod';
-  if (!isHistory(rec) && scheduledPeriods(state, person, rec.periodEnd, 1).some(r => r.id !== rec.id && rentOverlap(rec, r))) return 'overlap';
+  const cutoff = rentTrackingStart(state, person), previous = state.data.rents[rec.id];
+  const saved = previous && !previous.deleted && previous.residentId === rec.residentId && isHistory(previous) === isHistory(rec)
+    && (isHistory(rec) || rentDates(previous).periodStart === d.periodStart);
+  if (!saved && !isHistory(rec) && d.periodStart && cutoff && d.periodStart < cutoff) return 'beforeLedger';
+  if (!saved && isHistory(rec) && d.periodStart && cutoff && d.periodStart >= cutoff) return 'activePeriod';
+  if (scheduledPeriods(state, person, d.periodEnd || d.periodStart || person.moveIn, 1).some(r => r.id !== rec.id && rentOverlap(rec, r))) return 'overlap';
   if (Object.values(state.data.rents).some(r => !r.deleted && r.id !== rec.id && r.residentId === rec.residentId && rentOverlap(rec, r))) return 'overlap';
   return null;
 }

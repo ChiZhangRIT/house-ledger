@@ -502,7 +502,15 @@ Object.assign(zh, {
   'rent.scheduleError.frozen': '这个约定已关联保存的租期。请在最后一个已保存租期结束后新增约定；若需更正历史，请单独编辑对应租期。',
   'rent.scheduleMissing': '租期约定待设置',
   'rent.scheduleMissingHint': '请在「编辑住户」中设置这位住户的租期与交租日，也可先新增一个自定义租期。尚未设置时不计算逾期。',
-  'rent.scheduleSettings': '每位住户的租期与交租日在「住户 → 编辑住户」中单独设置。',
+  'rent.scheduleSettings': '每位住户的应收跟踪日期、租期与交租日在「住户 → 编辑住户」中单独设置。',
+  'rent.trackingStart': '开始跟踪应收的日期',
+  'rent.trackingHint': '填写首个要跟踪租期的覆盖开始日期。该日及以后开始的租期自动计算应收、待收和逾期；更早的房租可补记历史。留空不自动生成应收；已保存的租期和收款不变。',
+  'rent.trackingSince': '从 {date} 开始跟踪应收，按租期的覆盖开始日期判断。已保存的租期和收款继续保留。',
+  'rent.trackingSetup': '尚未设置自动应收跟踪。在「编辑住户」中填写开始日期；仍可单独添加租期和记录收款。',
+  'rent.trackingNotStarted': '应收跟踪未设置',
+  'rent.notStarted': '暂无应收',
+  'rent.scheduleError.trackingDate': '请填写有效的应收跟踪日期，或留空以暂停自动生成应收。',
+  'set.legacyLedger': '旧版开账月份（用于兼容历史数据）',
   'rent.selectedPeriod': '约定交租日：{due}；本次覆盖：{start} 至 {end}（含当天）。',
   'rent.unassignedHint': '这笔到账的租期尚未确认，暂不冲抵任何应收。之后可编辑收款，指定覆盖日期。',
   'rent.assignmentHint': '提前、补交或分次付款都归入所选租期；实际到账日期独立保存。退款用负数，只影响同一租期。',
@@ -517,7 +525,7 @@ Object.assign(zh, {
   'rent.historyMissingHint': '以下记录尚缺覆盖日期、交租日、实收金额、到账日期或付款确认，可逐条补齐。',
   'rent.missingMonths': '{n} 条待补',
   'rent.receiptsNote': '按实际到账的自然月统计，包含日期与实收金额均已确认的历史补记；退款计负数。租期用于说明付款覆盖范围，不用来替代到账日期。',
-  'rent.historyHint': '补记开账月份之前的房租，约定交租日、覆盖起止日期、实收金额和到账日期分别填写；未知可留空。历史补记不冲抵当前欠款。',
+  'rent.historyHint': '补记这位住户开始跟踪应收之前的房租；未设置跟踪日期时也可补记。约定交租日、覆盖日期、实收金额和到账日期分别填写，未知可留空。历史记录不自动生成当前欠款，也不冲抵当前欠款。',
   'set.ledgerHint': '按覆盖开始日期区分：开账月份 1 日及以后的租期纳入当前台账，更早的租期可独立补记历史。'
 });
 Object.assign(en, {
@@ -548,7 +556,15 @@ Object.assign(en, {
   'rent.scheduleError.frozen': 'This agreement has saved periods. Add a new agreement after the last saved period, or correct an individual period directly.',
   'rent.scheduleMissing': 'Rent schedule needed',
   'rent.scheduleMissingHint': 'Set this tenant’s schedule and due day in Edit tenant, or add a custom period. No overdue rent is inferred without a schedule.',
-  'rent.scheduleSettings': 'Set each tenant’s cycle and due date in Tenants → Edit tenant.',
+  'rent.scheduleSettings': 'Set each tenant’s receivables tracking date, cycle and due date in Tenants → Edit tenant.',
+  'rent.trackingStart': 'Start tracking rent receivables from',
+  'rent.trackingHint': 'Enter the coverage start of the first period to track. Periods starting on or after this date generate charges and balances; earlier rent can be recorded as history. Leave blank to stop automatic charges. Saved periods and receipts remain unchanged.',
+  'rent.trackingSince': 'Track receivables for periods starting on or after {date}. Saved periods and receipts remain available.',
+  'rent.trackingSetup': 'Automatic tracking is not set. Enter a start date in Edit tenant. You can still add individual periods and record receipts.',
+  'rent.trackingNotStarted': 'Tracking not set',
+  'rent.notStarted': 'No receivables yet',
+  'rent.scheduleError.trackingDate': 'Enter a valid tracking date, or leave blank to stop automatic charges.',
+  'set.legacyLedger': 'Legacy opening month (historical compatibility)',
   'rent.selectedPeriod': 'Agreed due: {due}. Covers {start} through {end} (inclusive).',
   'rent.unassignedHint': 'Coverage is unconfirmed. This receipt will not settle a charge until you assign its rent period.',
   'rent.assignmentHint': 'Early, late and partial payments belong to the selected period. Receipt dates are separate. Negative refunds affect that same period only.',
@@ -563,11 +579,11 @@ Object.assign(en, {
   'rent.historyMissingHint': 'These records need coverage dates, due dates, amounts, receipt dates or payment confirmation.',
   'rent.missingMonths': '{n} entries to complete',
   'rent.receiptsNote': 'Grouped by the calendar month of receipt, including historical entries with confirmed receipt dates and amounts. Refunds are negative. Coverage dates never replace receipt dates.',
-  'rent.historyHint': 'Record rent before the ledger start month. Due date, coverage, amount received and receipt date are separate; unknown fields may be blank. Historical entries do not settle current balances.',
+  'rent.historyHint': 'Record rent before this tenant’s tracking date, or while tracking is unset. Due date, coverage, amount received and receipt date are separate; unknown fields may be blank. Historical entries neither create nor settle current balances.',
   'set.ledgerHint': 'Periods starting on or after the first day of this month belong in the current ledger. Earlier periods can be recorded as history.'
 });
 
-Object.assign(zh, { 'rent.historyError.beforeLedger': '这个租期早于开账月份，请使用「补记历史房租」。', 'rent.adjustmentPeriodHint': '调整需归入明确租期，计入该租期应收。旧调整请先指定租期；尚未分配时不计入已确认逾期。' });
-Object.assign(en, { 'rent.historyError.beforeLedger': 'This period precedes the ledger start. Add it as historical rent.', 'rent.adjustmentPeriodHint': 'Assign adjustments to an explicit rent period. They change that period’s charge. Unassigned legacy adjustments are excluded from confirmed overdue totals.' });
+Object.assign(zh, { 'rent.historyError.beforeLedger': '这个租期早于这位住户开始跟踪应收的日期，请使用「补记历史房租」或调整该住户的跟踪日期。', 'rent.adjustmentPeriodHint': '调整需归入明确租期，计入该租期应收。旧调整请先指定租期；尚未分配时不计入已确认逾期。' });
+Object.assign(en, { 'rent.historyError.beforeLedger': 'This period precedes this tenant’s tracking date. Record it as historical rent or change that tenant’s tracking date.', 'rent.adjustmentPeriodHint': 'Assign adjustments to an explicit rent period. They change that period’s charge. Unassigned legacy adjustments are excluded from confirmed overdue totals.' });
 
 export const STRINGS = { 'zh-Hans': zh, en };

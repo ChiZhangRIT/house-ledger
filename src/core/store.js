@@ -2,6 +2,7 @@
 // 多台设备合并时逐条比较 updatedAt，取较新的一份；时间相同但内容不同时按内容排序取一份，保证每台设备结果一样。
 
 import { isISODate } from './dates.js';
+import { rentTrackingStart } from './rentPeriods.js';
 
 export const COLLECTIONS = ['providers', 'residents', 'bills', 'payments', 'rents', 'adjustments', 'exports', 'dismissals', 'comments', 'servicePeriods'];
 // 不认识的集合（以后的版本新加的）也原样保留、照样合并，旧版 app 同步时不会把它们弄丢
@@ -72,6 +73,8 @@ export function normalizeState(s) {
   }
   if (isObj(s.settings)) for (const [k, v] of Object.entries(s.settings)) if (safeKey(k)) out.settings[k] = v;
   if (isObj(s.settingsAt)) for (const [k, t] of Object.entries(s.settingsAt)) if (safeKey(k) && Number(t) > 0) out.settingsAt[k] = Number(t);
+  // 冻结旧版的计算界线，不改记录时间；之后每位住户可独立设置。
+  for (const r of Object.values(out.data.residents)) if (isISODate(r.moveIn)) r.rentTrackingStart = rentTrackingStart(out, r);
   return out;
 }
 

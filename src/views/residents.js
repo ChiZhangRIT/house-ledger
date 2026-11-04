@@ -8,7 +8,7 @@ import { newId } from '../core/store.js';
 import { participation, weightOn } from '../core/split.js';
 import { rentOn } from '../core/ledger.js';
 import { buildRentLedger } from '../core/rent.js';
-import { validateSchedules, scheduledPeriods } from '../core/rentPeriods.js';
+import { validateSchedules, scheduledPeriods, rentTrackingStart } from '../core/rentPeriods.js';
 import { SPLIT_CATEGORIES } from '../core/providers.js';
 import { avatar, emptyState } from './parts.js';
 import { parseAmount } from '../ui/parse.js';
@@ -66,7 +66,8 @@ function timeline(D) {
 /** 编辑 / 新建住户 */
 export function openResident(ctx, r) {
   const isNew = !r;
-  const w = r ? JSON.parse(JSON.stringify(r)) : { id: 'r_' + newId(), name: '', moveIn: ctx.D.today, moveOut: null, weights: [], utilities: { energy: 'share', water: 'share', internet: 'share' }, rent: [], isOwner: !ctx.D.residents.some(x => x.isOwner) };
+  const w = r ? JSON.parse(JSON.stringify(r)) : { id: 'r_' + newId(), name: '', moveIn: ctx.D.today, moveOut: null, weights: [], utilities: { energy: 'share', water: 'share', internet: 'share' }, rent: [], rentTrackingStart: null, isOwner: !ctx.D.residents.some(x => x.isOwner) };
+  w.rentTrackingStart = rentTrackingStart(ctx.S, w);
   w.rentSchedules = w.rentSchedules || []; w.weights = w.weights || []; w.rent = w.rent || []; w.utilities = w.utilities || {};
   let dirty = false;
   const err = h('p.err', { hidden: true });
@@ -130,7 +131,7 @@ export function openResident(ctx, r) {
   const drawSchedules = () => schedules.replaceChildren(...w.rentSchedules.map((x, i) => {
     const example = h('p.note');
     const preview = () => {
-      const rows = scheduledPeriods({ ...ctx.S, settings: { ...ctx.S.settings, ledgerStart: x.from?.slice(0, 7) }, data: { ...ctx.S.data, rents: {} } }, { ...w, rentSchedules: [x] }, x.from || ctx.D.today, 1);
+      const rows = scheduledPeriods({ ...ctx.S, data: { ...ctx.S.data, rents: {} } }, { ...w, rentTrackingStart: x.from, rentSchedules: [x] }, x.from || ctx.D.today, 1);
       const first = rows[0];
       example.textContent = first ? t('rent.scheduleExample', { due: first.dueDate, start: first.periodStart, end: first.periodEnd }) : '';
     };
@@ -145,7 +146,10 @@ export function openResident(ctx, r) {
     dirty = true; drawSchedules();
   } }, '＋ ' + t('rent.addSchedule')));
   drawSchedules();
-  const rentBox = h('fieldset', { hidden: !!w.isOwner }, h('legend', null, t('res.rent')), h('p.note', null, t('res.rentHint')), listEl(w.rent, 'amount', '$', parseAmount), h('h3', null, t('rent.schedule')), h('p.note', null, t('rent.scheduleHint')), schedules);
+  const rentBox = h('fieldset', { hidden: !!w.isOwner }, h('legend', null, t('res.rent')),
+    h('label.field', null, h('span.field-label', null, t('rent.trackingStart')),
+      h('input', { type: 'date', value: w.rentTrackingStart || '', oninput: e => { w.rentTrackingStart = e.target.value || null; dirty = true; } }), h('span.hint', null, t('rent.trackingHint'))),
+    h('p.note', null, t('res.rentHint')), listEl(w.rent, 'amount', '$', parseAmount), h('h3', null, t('rent.schedule')), h('p.note', null, t('rent.scheduleHint')), schedules);
   const sheet = openSheet({
     title: isNew ? t('res.add') : t('res.edit'), wide: true,
     body: h('div.form', null,

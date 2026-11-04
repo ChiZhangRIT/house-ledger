@@ -1,9 +1,8 @@
 // 设置：收款规则、提醒、账单方、同步、数据（导入 / 备份）、语言与外观、隐私说明
 import { h, openSheet, copyText, download, toast } from '../ui/dom.js';
-import { t, getLang, LANGS, month } from '../i18n.js';
+import { t, getLang, LANGS } from '../i18n.js';
 import { normalizeState, mergeStates, live, canon } from '../core/store.js';
 import { SyncError } from '../core/sync.js';
-import { periodRange, prevPeriod, nextPeriod } from '../core/ledger.js';
 import { SPLIT_CATEGORIES } from '../core/providers.js';
 import { sourceNotes } from './notes.js';
 import { batchDocuments } from './documents.js';
@@ -14,19 +13,12 @@ export function render(root, ctx) {
   const S = ctx.S, set = (k, v) => ctx.quietly(() => ctx.setSetting(k, v));      // 不重画：免得吞掉下一下点击
   const putQuiet = rec => ctx.quietly(() => ctx.put('providers', rec));
   const cur = p => ctx.S.data.providers[p.id] || p;      // 同一行连续改两项：第二次要在最新的记录上改
-  const L = ctx.D.ledger;
-
   // 收款规则
-  const first = (ctx.D.residents.map(r => r.moveIn).filter(Boolean).sort()[0] || ctx.D.today).slice(0, 7);
-  const keys = periodRange(prevPeriod(first), nextPeriod(nextPeriod(L.current))).reverse();
   root.append(section(t('set.rules'),
     field(t('set.property'), h('input', { value: S.settings.propertyName || '', onchange: e => set('propertyName', e.target.value.trim()) })),
     h('div.field-row', null,
       h('p.note', null, t('rent.scheduleSettings')),
       field(t('set.grace'), h('input', { type: 'number', min: 0, max: 31, value: S.settings.graceDays ?? 3, onchange: e => set('graceDays', Math.max(0, Number(e.target.value) || 0)) }), t('set.graceHint'))),
-    field(t('set.ledgerStart'), h('select', { onchange: e => set('ledgerStart', e.target.value || null) },
-      h('option', { value: '', selected: !S.settings.ledgerStart }, t('set.ledgerNone')),
-      keys.map(k => h('option', { value: k, selected: k === S.settings.ledgerStart }, month(k)))), t('set.ledgerHint')),
     field(t('set.prorate'), h('select', { onchange: e => set('prorate', e.target.value) },
       ['daily', 'full'].map(v => h('option', { value: v, selected: (S.settings.prorate || 'daily') === v }, t('set.prorate.' + v)))))));
 
@@ -75,7 +67,7 @@ export function render(root, ctx) {
   root.append(section(t('set.about'), h('ul.small', null, ['privacy.local', 'privacy.pdf', 'privacy.sync', 'privacy.home'].map(k => h('li', null, t(k)))), h('p.note', null, 'pdf.js © Mozilla (Apache-2.0)')));
 }
 
-const SETTING_LABEL = { propertyName: 'set.property', rentCycleDay: 'set.cycleDay', graceDays: 'set.grace', ledgerStart: 'set.ledgerStart', prorate: 'set.prorate', payInstructions: 'set.payInstructions', anomalyPct: 'set.anomalyPct', anomalyMin: 'set.anomalyMin', expectLateDays: 'set.expectLate' };
+const SETTING_LABEL = { propertyName: 'set.property', rentCycleDay: 'set.cycleDay', graceDays: 'set.grace', ledgerStart: 'set.legacyLedger', prorate: 'set.prorate', payInstructions: 'set.payInstructions', anomalyPct: 'set.anomalyPct', anomalyMin: 'set.anomalyMin', expectLateDays: 'set.expectLate' };
 const fmtSetting = v => (v == null || v === '' ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v));
 const section = (title, ...kids) => h('section.card.settings-sec', null, h('h2.section-h', null, title), kids);
 const field = (label, input, hint) => h('label.field', null, h('span.field-label', null, label), input, hint ? h('span.hint', null, hint) : null);
@@ -112,7 +104,6 @@ export async function importFile(ctx, file) {
   const sheet = openSheet({
     title: d.kind === 'backup' ? t('imp.backupH') : (d.kind === 'source-notes' ? t('notes.importTitle') : t('imp.importH')),
     body: h('div', null, h('p', null, t('imp.counts', { bills: n('bills'), residents: n('residents'), payments: n('payments'), rents: n('rents') })),
-      st.settings.ledgerStart && !ctx.S.settings.ledgerStart ? h('p.note', null, t('imp.ledgerStart', { p: t('period.m', { m: Number(st.settings.ledgerStart.slice(5)), y: st.settings.ledgerStart.slice(0, 4) }) })) : null,
       changedSettings.length ? h('div.check.warn', null, h('span.check-icon', { 'aria-hidden': 'true' }, '⚠'),
         h('div', null, t('imp.settingsChange'), h('ul.small', null, changedSettings.map(k => h('li', null, (SETTING_LABEL[k] ? t(SETTING_LABEL[k]) : k) + t('p.colon') + fmtSetting(ctx.S.settings[k]) + ' → ' + fmtSetting(merged.settings[k])))))) : null,
       d.kind === 'source-notes' ? h('p', null, t('notes.importCount', { n: n('comments'), periods: n('servicePeriods') })) : null,

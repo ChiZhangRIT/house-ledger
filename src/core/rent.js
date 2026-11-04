@@ -2,7 +2,7 @@
 import { buildLedger, rentCharge } from './ledger.js';
 import { monthRange } from './analytics.js';
 import { isISODate, addDays } from './dates.js';
-import { isHistory, rentDates, completeRentDates, rentRef, scheduledPeriods, validateRentPeriod } from './rentPeriods.js';
+import { isHistory, rentDates, completeRentDates, rentRef, scheduledPeriods, validateRentPeriod, rentTrackingStart } from './rentPeriods.js';
 
 export function rentState(state) {
   const rentOnly = records => Object.fromEntries(Object.entries(records || {}).filter(([, x]) => x.purpose === 'rent'));
@@ -37,6 +37,7 @@ export function buildRentLedger(state, today) {
   }
   const L = buildLedger(rentState(state), today, { rentItems, assignedOnly: true });
   for (const [id, p] of Object.entries(L.people)) {
+    p.trackingNotStarted = !rentTrackingStart(state, state.data.residents[id]) && !p.items.some(x => x.type === 'rent');
     p.scheduleMissing = !(state.data.residents[id].rentSchedules || []).length && !p.items.some(x => x.type === 'rent');
     p.unassignedAdjustments = adjustments.filter(a => a.residentId === id && !p.items.some(x => x.rentId === a.rentId));
     p.unassignedPayments = p.payments.filter(x => !x.rentId || !p.items.some(i => i.rentId === x.rentId));

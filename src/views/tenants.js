@@ -10,6 +10,7 @@ import { openPayment } from './money.js';
 
 export function rentStatus(p) {
   if ((p?.unassignedPayments?.length || p?.unassignedAdjustments?.length)) return statusChip('unknown', t('rent.datesPending'));
+  if (p?.trackingNotStarted) return statusChip('none', t('rent.trackingNotStarted'));
   if (p?.scheduleMissing) return statusChip('unknown', t('rent.scheduleMissing'));
   if (!p || !p.items.length) return statusChip('none', t('rent.notStarted'));
   if (p.unknownRent.length) return statusChip('unknown', t('rent.unknown'));
