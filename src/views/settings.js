@@ -1,10 +1,9 @@
-// 设置：收款规则、提醒、账单方、同步、数据（导入 / 备份）、语言与外观、隐私说明
+// 当前房屋资料；App、账单、住户三组设置。
 import { h, openSheet, copyText, download, toast } from '../ui/dom.js';
 import { t, getLang, LANGS } from '../i18n.js';
 import { normalizeState, mergeStates, live, canon } from '../core/store.js';
 import { SyncError } from '../core/sync.js';
 import { SPLIT_CATEGORIES } from '../core/providers.js';
-import { sourceNotes } from './notes.js';
 import { batchDocuments } from './documents.js';
 import { clearBillPdfs } from '../core/documents.js';
 import { openDeleted } from './deleted.js';
@@ -13,17 +12,21 @@ export function render(root, ctx) {
   const S = ctx.S, set = (k, v) => ctx.quietly(() => ctx.setSetting(k, v));      // 不重画：免得吞掉下一下点击
   const putQuiet = rec => ctx.quietly(() => ctx.put('providers', rec));
   const cur = p => ctx.S.data.providers[p.id] || p;      // 同一行连续改两项：第二次要在最新的记录上改
-  // 收款规则
-  root.append(section(t('set.rules'),
+  root.append(h('section.card.settings-property', null, h('h2.section-h', null, t('set.currentProperty')),
     field(t('set.property'), h('input', { value: S.settings.propertyName || '', onchange: e => set('propertyName', e.target.value.trim()) })),
+    h('p.note', null, t('set.propertyScope'))));
+  const appSettings = group(t('set.appSettings'));
+
+  // 住户的默认房租规则
+  const tenantSettings = group(t('set.tenantSettings'), section(t('set.rules'),
+    h('p.note', null, t('rent.scheduleSettings')),
     h('div.field-row', null,
-      h('p.note', null, t('rent.scheduleSettings')),
-      field(t('set.grace'), h('input', { type: 'number', min: 0, max: 31, value: S.settings.graceDays ?? 3, onchange: e => set('graceDays', Math.max(0, Number(e.target.value) || 0)) }), t('set.graceHint'))),
-    field(t('set.prorate'), h('select', { onchange: e => set('prorate', e.target.value) },
-      ['daily', 'full'].map(v => h('option', { value: v, selected: (S.settings.prorate || 'daily') === v }, t('set.prorate.' + v)))))));
+      field(t('set.grace'), h('input', { type: 'number', min: 0, max: 31, value: S.settings.graceDays ?? 3, onchange: e => set('graceDays', Math.max(0, Number(e.target.value) || 0)) }), t('set.graceHint')),
+      field(t('set.prorate'), h('select', { onchange: e => set('prorate', e.target.value) },
+        ['daily', 'full'].map(v => h('option', { value: v, selected: (S.settings.prorate || 'daily') === v }, t('set.prorate.' + v))))))));
 
   // 账单方
-  root.append(section(t('set.providers'),
+  const billSettings = group(t('set.billSettings'), section(t('set.providers'),
     h('div.table-scroll', null, h('table.data-table.providers', null,
       h('thead', null, h('tr', null, h('th', null, t('set.provName')), h('th', null, t('bill.category')), h('th', null, t('set.convention')), h('th', null, t('set.autopay')), h('th', null, t('set.active')))),
       h('tbody', null, ctx.D.providerList.map(p => h('tr', null,
@@ -33,11 +36,12 @@ export function render(root, ctx) {
         h('td', null, h('input', { type: 'checkbox', 'aria-label': t('set.autopay'), checked: !!p.autopay, onchange: e => putQuiet({ ...cur(p), autopay: e.target.checked }) })),
         h('td', null, h('input', { type: 'checkbox', 'aria-label': t('set.active'), checked: p.active !== false, onchange: e => putQuiet({ ...cur(p), active: e.target.checked }) }))))))),
     h('p.note', null, t('set.convHint')),
-    h('button.link-btn', { type: 'button', onclick: () => addProvider(ctx) }, '＋ ' + t('set.addProvider'))));
+    h('button.link-btn', { type: 'button', onclick: () => addProvider(ctx) }, '＋ ' + t('set.addProvider'))),
+    section(t('set.documents'), batchDocuments(ctx)));
 
   // 同步
   const s = ctx.L.sync;
-  root.append(section(t('set.sync'),
+  appSettings.append(section(t('set.sync'),
     s ? [h('p', null, t('set.syncOn', { repo: s.repo })),
       s.err ? h('p.err', null, t('syncErr.' + s.err.code, s.err.vars)) : null,
       h('div.row', null,
@@ -48,28 +52,30 @@ export function render(root, ctx) {
 
   // 数据
   const fileIn = h('input', { type: 'file', accept: '.json,application/json', hidden: true, onchange: e => { const f = e.target.files[0]; e.target.value = ''; if (f) importFile(ctx, f); } });
-  root.append(section(t('set.data'),
+  const dataSettings = h('details.card.settings-sec', null, h('summary', null, t('set.data')),
     h('p.note', null, t('set.dataNote')),
     h('div.row', null,
       h('button.btn', { type: 'button', onclick: () => fileIn.click() }, t('set.import')),
       h('button.btn', { type: 'button', onclick: () => download(`house-ledger-backup-${ctx.D.today}.json`, JSON.stringify({ app: 'house-ledger', kind: 'backup', v: 1, createdAt: new Date().toISOString(), state: ctx.S })) }, t('set.export')),
       h('button.btn', { type: 'button', onclick: () => openDeleted(ctx) }, t('deleted.title')),
       h('button.btn.danger', { type: 'button', onclick: () => clearDevice(ctx) }, t('set.clear'))),
-    fileIn, batchDocuments(ctx)));
-  const notes = sourceNotes(S); if (notes) root.append(notes);
+    fileIn);
 
   // 语言与外观
-  root.append(section(t('set.look'),
+  appSettings.append(section(t('set.look'),
     h('div.field-row', null,
       field(t('set.lang'), h('select', { onchange: e => ctx.setLang(e.target.value) }, LANGS.map(l => h('option', { value: l, selected: l === getLang() }, l === 'en' ? 'English' : '简体中文')))),
       field(t('set.theme'), h('select', { onchange: e => ctx.setTheme(e.target.value) }, ['auto', 'light', 'dark'].map(v => h('option', { value: v, selected: (ctx.L.theme || 'auto') === v }, t('theme.' + v))))))));
 
-  root.append(section(t('set.about'), h('ul.small', null, ['privacy.local', 'privacy.pdf', 'privacy.sync', 'privacy.home'].map(k => h('li', null, t(k)))), h('p.note', null, 'pdf.js © Mozilla (Apache-2.0)')));
+  appSettings.append(dataSettings,
+    h('details.card.settings-sec', null, h('summary', null, t('set.about')), h('ul.small', null, ['privacy.local', 'privacy.pdf', 'privacy.sync', 'privacy.home'].map(k => h('li', null, t(k)))), h('p.note', null, 'pdf.js © Mozilla (Apache-2.0)')));
+  root.append(appSettings, billSettings, tenantSettings);
 }
 
 const SETTING_LABEL = { propertyName: 'set.property', rentCycleDay: 'set.cycleDay', graceDays: 'set.grace', ledgerStart: 'set.legacyLedger', prorate: 'set.prorate', payInstructions: 'set.payInstructions', anomalyPct: 'set.anomalyPct', anomalyMin: 'set.anomalyMin', expectLateDays: 'set.expectLate' };
 const fmtSetting = v => (v == null || v === '' ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v));
-const section = (title, ...kids) => h('section.card.settings-sec', null, h('h2.section-h', null, title), kids);
+const group = (title, ...kids) => h('section.settings-group', null, h('h2.settings-group-title', null, title), kids);
+const section = (title, ...kids) => h('section.card.settings-sec', null, h('h3.section-h', null, title), kids);
 const field = (label, input, hint) => h('label.field', null, h('span.field-label', null, label), input, hint ? h('span.hint', null, hint) : null);
 
 function addProvider(ctx) {

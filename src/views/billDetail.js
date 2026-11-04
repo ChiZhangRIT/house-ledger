@@ -6,7 +6,7 @@ import { billStats, billShares } from '../core/analytics.js';
 import { dayNumber } from '../core/dates.js';
 import { billBadges, splitTable, compareTable, dot, providerOf, residentName, emptyState } from './parts.js';
 import { openBillForm } from './billForm.js';
-import { sourceNotes, fieldGuide } from './notes.js';
+import { billNotes, fieldGuide } from './notes.js';
 import { providerHistory } from './providerHistory.js';
 import { billDocument } from './documents.js';
 
@@ -51,7 +51,7 @@ export function render(root, ctx, [id]) {
       Math.abs(sum - b.total) > 0.005 ? h('p.note.warn-text', null, '⚠ ' + t('check.itemsSum', { sum, diff: Math.round((b.total - sum) * 100) / 100 })) : null));
     root.append(fieldGuide([...new Set(items.map(i => i.key))]));
   }
-  const notes = sourceNotes(ctx.S, 'bills', b.id); if (notes) root.append(notes);
+  const notes = billNotes(ctx.S, b); if (notes) root.append(notes);
 
   // 用量和单价
   const usage = Object.entries(st.usage);
@@ -79,8 +79,7 @@ export function render(root, ctx, [id]) {
       src.file ? fact(t('src.file'), src.file) : null,
       src.sha256 ? fact('SHA-256', src.sha256.slice(0, 12) + '…') : null,
       src.parser ? fact(t('src.parser'), src.parser) : null,
-      src.at ? fact(t('src.at'), new Date(src.at).toLocaleString()) : null),
-    b.note ? h('p', null, b.note) : null));
+      src.at ? fact(t('src.at'), new Date(src.at).toLocaleString()) : null)));
 }
 
 const fact = (k, v) => h('div', null, h('dt', null, k), h('dd', null, v));
