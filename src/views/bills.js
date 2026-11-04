@@ -2,7 +2,6 @@
 import { h } from '../ui/dom.js';
 import { t, money, period, date, num, pct } from '../i18n.js';
 import { columnChart } from '../ui/charts.js';
-import { addMonths } from '../core/analytics.js';
 import { UTILITIES, UTILITY_INFO, utilityRows, billCostSeries, utilityYearComparison } from '../core/utilities.js';
 import { ITEM_COLOR } from '../ui/colors.js';
 import { emptyState } from './parts.js';
@@ -23,8 +22,7 @@ export function render(root, ctx) {
   const info = UTILITY_INFO[key], all = utilityRows(D.bills, D.providers, key, ctx.S.data.servicePeriods);
   const range = ['12', '24', 'all'].includes(prefs.utilityRange) ? prefs.utilityRange : '12';
   const daily = prefs.utilityMetric === 'daily';
-  const cutoff = all.length && range !== 'all' ? addMonths(all.at(-1).bill.statementDate.slice(0, 7), 1 - Number(range)) + '-01' : '';
-  const rows = all.filter(r => r.bill.statementDate >= cutoff);
+  const rows = range === 'all' ? all : all.slice(-Number(range));
   const set = (k, v) => { ctx.setPref(k, v); ctx.render(); };
   root.append(h('div.utility-controls', null,
     h('div.seg-tabs.utility-tabs', { role: 'tablist', 'aria-label': t('u.choose') }, UTILITIES.map(k =>
@@ -45,8 +43,8 @@ export function render(root, ctx) {
   root.append(h('div.chart-controls', null,
     h('div.seg-tabs', { role: 'group', 'aria-label': t('u.metric') }, ['total', 'daily'].map(m =>
       h('button.seg-tab' + ((m === 'daily') === daily ? '.on' : ''), { type: 'button', 'aria-pressed': String((m === 'daily') === daily), onclick: () => set('utilityMetric', m) }, t('u.metric.' + m)))),
-    h('label.select', null, h('span.sr-only', null, t('an.range')), h('select', { 'aria-label': t('an.range'), onchange: e => set('utilityRange', e.target.value) },
-      ['12', '24', 'all'].map(r => h('option', { value: r, selected: r === range }, t('an.range.' + r)))))));
+    h('label.select', null, h('span.sr-only', null, t('u.range')), h('select', { 'aria-label': t('u.range'), onchange: e => set('utilityRange', e.target.value) },
+      ['12', '24', 'all'].map(r => h('option', { value: r, selected: r === range }, t('u.range.' + r)))))));
   const comparisons = daily ? new Map(all.map(r => [r.bill.id, utilityYearComparison(r, all)])) : null;
   const chart = (field, title, format, tickFormat) => {
     const el = h('section.card.chart-card');
