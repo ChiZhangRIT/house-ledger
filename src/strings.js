@@ -313,7 +313,7 @@ Object.assign(zh, {
   'pdf.saveFail': 'PDF 副本保存失败，请检查浏览器存储空间后重试。', 'pdf.unavailable': '当前浏览器无法读取附件存储，请保留并在外部查看原文件。',
   'pdf.billSavedWithout': '账单已保存，但 PDF 副本保存失败。可在账单详情中重新关联原文件。', 'pdf.clearFail': '附件存储无法清空，本次清空操作未完成。',
   'pdf.loading': '正在打开原始 PDF…', 'pdf.previous': '上一页', 'pdf.next': '下一页', 'pdf.page': v => `第 ${v.n}/${v.total} 页`, 'pdf.download': '下载原文件', 'pdf.close': '关闭', 'pdf.readFail': 'PDF 无法预览，可下载原文件后打开。',
-  'u.electricityTab': '电力（输配＋发电）', 'u.electricityNote': '电力费用 = 输配费 + 发电费。两项对应同一份用电量（kWh），用量只计一次；整期费用图按两项堆叠。', 'u.electricityCostChart': '电力费用构成：输配＋发电（USD）',
+  'u.electricityTab': '电力', 'u.electricityNote': '电力费用 = 输配费 + 发电费。两项对应同一份用电量（kWh），用量只计一次；整期费用图按两项堆叠。', 'u.electricityCostChart': '电力费用构成：输配＋发电（USD）',
   'u.allHistory': v => `全部 ${v.n} 张 · 出账日期 ${v.from} 至 ${v.to}；不受上方图表范围影响。`,
   'bills.providerCost': '{name} 历史费用构成（USD）', 'bills.providerCostNote': '全部 {n} 张账单，每屏最多显示 12 张；仅堆叠同一张账单的费用，负数为抵扣。向左查看早期账单，点击柱子查看记录。',
   'item.electricity': '电力费用', 'item.unallocated': '未分项金额', 'bill.calendar': '到期日历提醒', 'bill.calendarHelp': '下载日历文件，手动加入系统日历；到期前 3 天提醒，不会自动写入日历。',
