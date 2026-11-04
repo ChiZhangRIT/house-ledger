@@ -1,6 +1,8 @@
 // 数据层：所有数据都是「集合 → 记录」，每条记录有 id、updatedAt（毫秒时间戳），删除时留一个 deleted 标记。
 // 多台设备合并时逐条比较 updatedAt，取较新的一份；时间相同但内容不同时按内容排序取一份，保证每台设备结果一样。
 
+import { isISODate } from './dates.js';
+
 export const COLLECTIONS = ['providers', 'residents', 'bills', 'payments', 'rents', 'adjustments', 'exports', 'dismissals', 'comments', 'servicePeriods'];
 // 不认识的集合（以后的版本新加的）也原样保留、照样合并，旧版 app 同步时不会把它们弄丢
 const collectionsOf = (...states) => [...new Set([...COLLECTIONS, ...states.flatMap(s => Object.keys((s && s.data) || {}))])].filter(c => safeKey(c));
@@ -36,6 +38,7 @@ const VALIDATE = {
     ...r, moveOut: ISO(r.moveOut) ? r.moveOut : null,
     weights: (Array.isArray(r.weights) ? r.weights : []).filter(w => isObj(w) && ISO(w.from) && typeof w.weight === 'number' && Number.isFinite(w.weight) && w.weight >= 0 && w.weight <= 100),
     rent: (Array.isArray(r.rent) ? r.rent : []).filter(x => isObj(x) && ISO(x.from) && amount(x.amount)),
+    rentSchedules: (Array.isArray(r.rentSchedules) ? r.rentSchedules : []).filter(x => isObj(x) && isISODate(x.from) && Number.isInteger(x.cycleDay) && x.cycleDay >= 1 && x.cycleDay <= 31 && Number.isInteger(x.dueDay) && x.dueDay >= 1 && x.dueDay <= 31 && [-1, 0, 1].includes(x.dueMonthOffset)),
     utilities: isObj(r.utilities) ? r.utilities : {},
   } : null),
   bills: r => (ISO(r.statementDate) && ISO(r.periodStart) && ISO(r.periodEnd) && amount(r.total) && typeof r.providerId === 'string' ? {
@@ -48,7 +51,7 @@ const VALIDATE = {
     source: isObj(r.source) ? r.source : {},
   } : null),
   payments: r => (typeof r.residentId === 'string' && ISO(r.date) && amount(r.amount) ? r : null),
-  rents: r => (typeof r.residentId === 'string' && typeof r.periodStart === 'string' && /^\d{4}-\d{2}/.test(r.periodStart) ? { ...r, amount: amount(r.amount) ? r.amount : null, receivedAmount: amount(r.receivedAmount) && r.receivedAmount >= 0 ? r.receivedAmount : null } : null),
+  rents: r => (typeof r.residentId === 'string' && (r.history === false ? isISODate(r.periodStart) && isISODate(r.periodEnd) && r.periodEnd >= r.periodStart && isISODate(r.dueDate) : (typeof r.periodStart === 'string' && /^\d{4}-\d{2}/.test(r.periodStart)) || ISO(r.legacyDate) || ISO(r.dueDate) || ISO(r.paidDate)) ? { ...r, amount: amount(r.amount) ? r.amount : null, receivedAmount: amount(r.receivedAmount) && r.receivedAmount >= 0 ? r.receivedAmount : null } : null),
   adjustments: r => (typeof r.residentId === 'string' && MONTH(r.collectPeriod) && amount(r.amount) ? r : null),
 };
 

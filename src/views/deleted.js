@@ -1,6 +1,8 @@
 // 单条恢复，不用整份旧备份覆盖当前账本。
 import { h, openSheet } from '../ui/dom.js';
-import { t, money, date, month } from '../i18n.js';
+import { t, money, date } from '../i18n.js';
+import { rentOverlap } from '../core/rentPeriods.js';
+import { rentRange } from './rentHistory.js';
 import { normalizeState, restoredRecord } from '../core/store.js';
 
 const COLLECTIONS = ['bills', 'residents', 'rents', 'payments', 'adjustments'];
@@ -10,7 +12,7 @@ const label = (ctx, c, r) => {
   if (c === 'bills') return r.statementDate ? `${ctx.S.data.providers[r.providerId]?.name || ''} · ${date(r.statementDate, 'iso')} · ${money(r.total)}` : r.id;
   if (c === 'residents') return r.name || r.id;
   const name = ctx.S.data.residents[r.residentId]?.name || r.residentId || r.id;
-  return name + (r.periodStart ? ' · ' + month(r.periodStart.slice(0, 7)) : r.date ? ' · ' + date(r.date, 'iso') : '');
+  return name + (c === 'rents' ? ' · ' + rentRange(r) : r.date ? ' · ' + date(r.date, 'iso') : '');
 };
 
 export function openDeleted(ctx) {
@@ -22,8 +24,8 @@ export function openDeleted(ctx) {
     if (collection === 'residents' && restored.isOwner && ctx.D.residents.some(r => r.isOwner && r.id !== restored.id)) {
       ctx.toast(t('deleted.ownerConflict')); return;
     }
-    if (collection === 'rents' && Object.values(ctx.S.data.rents).some(r => !r.deleted && r.id !== restored.id && r.residentId === restored.residentId && r.periodStart.slice(0, 7) === restored.periodStart.slice(0, 7))) {
-      ctx.toast(t('rent.historyError.duplicate')); return;
+    if (collection === 'rents' && Object.values(ctx.S.data.rents).some(r => !r.deleted && r.id !== restored.id && r.residentId === restored.residentId && rentOverlap(r, restored))) {
+      ctx.toast(t('rent.historyError.overlap')); return;
     }
     ctx.put(collection, restored); draw(); ctx.toast(t('deleted.restored'));
   };

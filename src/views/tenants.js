@@ -1,6 +1,6 @@
 // 房东自用的住户与房租首页。
 import { h } from '../ui/dom.js';
-import { t, money, date, month } from '../i18n.js';
+import { t, money, date } from '../i18n.js';
 import { rentOn } from '../core/ledger.js';
 import { rentReceipts, rentHistorySummary } from '../core/rent.js';
 import { columnChart } from '../ui/charts.js';
@@ -9,6 +9,8 @@ import { openResident } from './residents.js';
 import { openPayment } from './money.js';
 
 export function rentStatus(p) {
+  if ((p?.unassignedPayments?.length || p?.unassignedAdjustments?.length)) return statusChip('unknown', t('rent.datesPending'));
+  if (p?.scheduleMissing) return statusChip('unknown', t('rent.scheduleMissing'));
   if (!p || !p.items.length) return statusChip('none', t('rent.notStarted'));
   if (p.unknownRent.length) return statusChip('unknown', t('rent.unknown'));
   if (p.overdue > 0.005) return statusChip('critical', t('st.overdue', { amount: p.overdue, days: p.overdueDays }));
@@ -27,8 +29,8 @@ export function render(root, ctx) {
   root.append(h('section.stats', null,
     stat(t('rent.living'), String(tenants.filter(r => r.moveIn <= D.today && (!r.moveOut || r.moveOut > D.today)).length)),
     stat(t('rent.receivedMonth'), money(receipts.payments.filter(p => p.date.startsWith(currentMonth)).reduce((s, p) => s + p.amount, 0))),
-    stat(t('rent.knownDue'), money(Object.values(D.ledger.people).reduce((s, p) => s + p.overdue, 0)))));
-  if (Object.values(D.ledger.people).some(p => p.unknownRent.length)) root.append(h('p.note', null, t('rent.unknownHint')));
+    stat(t('rent.knownDue'), money(Object.values(D.ledger.people).reduce((s, p) => s + ((p.unassignedPayments.length || p.unassignedAdjustments.length) ? 0 : p.overdue), 0)))));
+  if (Object.values(D.ledger.people).some(p => p.unknownRent.length || p.scheduleMissing || p.unassignedPayments.length || p.unassignedAdjustments.length)) root.append(h('p.note', null, t('rent.unknownHint')));
   for (const [label, list] of [[t('res.living'), D.residents.filter(r => !r.moveOut || r.moveOut > D.today)], [t('res.movedOut'), D.residents.filter(r => r.moveOut && r.moveOut <= D.today)]]) {
     if (!list.length) continue;
     const people = h('div.people', null, list.map(r => {
@@ -43,15 +45,6 @@ export function render(root, ctx) {
       : h('section.card', null, h('h2.section-h', null, label), people));
   }
   const history = rentHistorySummary(ctx.S);
-  if (history.values.some(v => v != null)) {
-    const chart = h('section.card.chart-card');
-    columnChart(chart, { title: t('rent.historyChart'), labels: history.months.map(k => k.replace('-', '/')),
-      longLabels: history.months.map((k, i) => month(k) + (history.partial[i] ? ' · ' + t('rent.historyPartial') : '')),
-      series: [{ key: 'rent', name: t('rent.receivedAmount'), color: 'var(--accent)', values: history.values }], partial: history.partial,
-      visibleCount: 12, format: v => money(v), tickFormat: v => money(v, { whole: v === 0 || Math.abs(v) >= 10 }),
-      height: 220, tableLabel: t('viz.table'), xName: t('rent.month') });
-    chart.append(h('p.note', null, t('rent.historyChartNote'))); root.append(chart);
-  }
   if (history.missing.length) root.append(h('section.card', null, h('h2.section-h', null, t('rent.historyMissing')),
     h('p.note', null, t('rent.historyMissingHint')),
     h('div.people', null, tenants.filter(r => history.missing.some(x => x.residentId === r.id)).map(r => {

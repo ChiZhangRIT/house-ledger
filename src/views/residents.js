@@ -8,6 +8,7 @@ import { newId } from '../core/store.js';
 import { participation, weightOn } from '../core/split.js';
 import { rentOn } from '../core/ledger.js';
 import { buildRentLedger } from '../core/rent.js';
+import { validateSchedules, scheduledPeriods } from '../core/rentPeriods.js';
 import { SPLIT_CATEGORIES } from '../core/providers.js';
 import { avatar, emptyState } from './parts.js';
 import { parseAmount } from '../ui/parse.js';
@@ -66,7 +67,7 @@ function timeline(D) {
 export function openResident(ctx, r) {
   const isNew = !r;
   const w = r ? JSON.parse(JSON.stringify(r)) : { id: 'r_' + newId(), name: '', moveIn: ctx.D.today, moveOut: null, weights: [], utilities: { energy: 'share', water: 'share', internet: 'share' }, rent: [], isOwner: !ctx.D.residents.some(x => x.isOwner) };
-  w.weights = w.weights || []; w.rent = w.rent || []; w.utilities = w.utilities || {};
+  w.rentSchedules = w.rentSchedules || []; w.weights = w.weights || []; w.rent = w.rent || []; w.utilities = w.utilities || {};
   let dirty = false;
   const err = h('p.err', { hidden: true });
   const fail = msg => { err.textContent = msg; err.hidden = false; err.scrollIntoView({ block: 'nearest' }); };
@@ -93,6 +94,8 @@ export function openResident(ctx, r) {
       weights: w.weights.filter(x => isISODate(x.from) && x.weight != null && x.weight !== '' && Number.isFinite(Number(x.weight)) && Number(x.weight) >= 0).map(x => ({ from: x.from, weight: Number(x.weight) })).sort((a, b) => (a.from < b.from ? -1 : 1)),
       rent: w.rent.filter(x => isISODate(x.from) && typeof x.amount === 'number').map(x => ({ from: x.from, amount: x.amount })).sort((a, b) => (a.from < b.from ? -1 : 1)) };
     delete rec.updatedAt;
+    const scheduleError = !rec.isOwner && validateSchedules(ctx.S, rec, r);
+    if (scheduleError) return fail(t('rent.scheduleError.' + scheduleError));
     const now = ctx.S.data.residents[w.id];
     if (!isNew && now && now.updatedAt !== r.updatedAt && !confirm(now.deleted ? t('form.deletedElsewhere') : t('form.changedElsewhere'))) return;
     const changes = impact(ctx, rec);
@@ -123,7 +126,26 @@ export function openResident(ctx, r) {
     ctx.remove('residents', w.id);
     sheet.close();
   };
-  const rentBox = h('fieldset', { hidden: !!w.isOwner }, h('legend', null, t('res.rent')), h('p.note', null, t('res.rentHint')), listEl(w.rent, 'amount', '$', parseAmount));
+  const schedules = h('div');
+  const drawSchedules = () => schedules.replaceChildren(...w.rentSchedules.map((x, i) => {
+    const example = h('p.note');
+    const preview = () => {
+      const rows = scheduledPeriods({ ...ctx.S, settings: { ...ctx.S.settings, ledgerStart: x.from?.slice(0, 7) }, data: { ...ctx.S.data, rents: {} } }, { ...w, rentSchedules: [x] }, x.from || ctx.D.today, 1);
+      const first = rows[0];
+      example.textContent = first ? t('rent.scheduleExample', { due: first.dueDate, start: first.periodStart, end: first.periodEnd }) : '';
+    };
+    const input = (key, label, type) => h('label.field', null, h('span.field-label', null, t(label)), h('input', { type, min: type === 'number' ? 1 : undefined, max: type === 'number' ? 31 : undefined, value: x[key], oninput: e => { x[key] = type === 'number' ? Number(e.target.value) : e.target.value; dirty = true; preview(); } }));
+    preview();
+    return h('fieldset', null, h('div.field-row', null, input('from', 'rent.effectiveFrom', 'date'), input('cycleDay', 'rent.cycleDay', 'number')),
+      h('div.field-row', null, h('label.field', null, h('span.field-label', null, t('rent.dueMonth')), h('select', { onchange: e => { x.dueMonthOffset = Number(e.target.value); dirty = true; preview(); } }, [-1, 0, 1].map(n => h('option', { value: n, selected: x.dueMonthOffset === n }, t('rent.dueMonth.' + n))))), input('dueDay', 'rent.dueDay', 'number')),
+      example, h('button.link-btn', { type: 'button', onclick: () => { w.rentSchedules.splice(i, 1); dirty = true; drawSchedules(); } }, t('form.remove')));
+  }), h('button.btn', { type: 'button', onclick: () => {
+    const savedEnd = Object.values(ctx.S.data.rents).filter(x => !x.deleted && x.history === false && x.residentId === w.id).map(x => x.periodEnd).sort().at(-1);
+    w.rentSchedules.push({ from: savedEnd ? addDays(savedEnd, 1) : (w.rentSchedules.length ? ctx.D.today : w.moveIn), cycleDay: 1, dueDay: 1, dueMonthOffset: 0 });
+    dirty = true; drawSchedules();
+  } }, '＋ ' + t('rent.addSchedule')));
+  drawSchedules();
+  const rentBox = h('fieldset', { hidden: !!w.isOwner }, h('legend', null, t('res.rent')), h('p.note', null, t('res.rentHint')), listEl(w.rent, 'amount', '$', parseAmount), h('h3', null, t('rent.schedule')), h('p.note', null, t('rent.scheduleHint')), schedules);
   const sheet = openSheet({
     title: isNew ? t('res.add') : t('res.edit'), wide: true,
     body: h('div.form', null,

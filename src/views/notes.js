@@ -11,7 +11,7 @@ export function sourceNotes(state, collection, id, showSource = true) {
     notes.map(n => h('article.source-note', null,
       showSource ? h('div.small.muted', null, `${n.source.sheet} / ${n.source.table} · ${n.source.cell}`,
         n.field ? ' · ' + (n.field.startsWith('items.') ? t('item.' + n.field.slice(6)) : t('noteField.' + n.field)) : '')
-        : n.target?.periodStart ? h('div.small.muted', null, n.target.periodStart.slice(0, 7)) : null, n.comments.map(thread))));
+        : n.target?.periodStart ? h('div.small.muted', null, t('rent.legacyDate', { date: n.target.periodStart })) : null, n.comments.map(thread))));
 }
 export function fieldGuide(keys) {
   return h('details.field-guide', null, h('summary', null, t('guide.title')), h('p.small.muted', null, t('guide.amounts')),

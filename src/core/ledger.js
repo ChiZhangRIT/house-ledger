@@ -12,6 +12,7 @@
 import { live } from './store.js';
 import { billShares } from './analytics.js';
 import { dayNumber, addDays } from './dates.js';
+import { monthDay, rentRef } from './rentPeriods.js';
 
 const cents = x => Math.round((Number(x) || 0) * 100);
 const dollars = c => c / 100;
@@ -21,7 +22,7 @@ const TYPE_ORDER = { opening: 0, rent: 1, bill: 2, adj: 3, refund: 4 };
 export const cycleDay = state => Math.min(28, Math.max(1, Number(state.settings.rentCycleDay) || 16));
 export const nextPeriod = key => { let [y, m] = key.split('-').map(Number); m += 1; if (m > 12) { m = 1; y += 1; } return `${y}-${pad(m)}`; };
 export const prevPeriod = key => { let [y, m] = key.split('-').map(Number); m -= 1; if (m < 1) { m = 12; y -= 1; } return `${y}-${pad(m)}`; };
-export const periodStart = (key, cd) => `${key}-${pad(cd)}`;
+export const periodStart = (key, cd) => monthDay(key, cd);
 export const periodEnd = (key, cd) => periodStart(nextPeriod(key), cd);       // 不含
 /** 包含某天的那一期 */
 export function periodOf(iso, cd) {
@@ -87,10 +88,12 @@ export function receivables(state, todayIso, D = {}) {
   const out = {};
   for (const r of residents) if (!r.isOwner) out[r.id] = [];
   const overrides = {};
-  for (const x of live(state, 'rents')) overrides[x.residentId + '|' + x.periodStart.slice(0, 7)] = x;
+  for (const x of live(state, 'rents')) if (x.periodStart) overrides[x.residentId + '|' + x.periodStart.slice(0, 7)] = x;
   const cur = periodOf(todayIso, cd);
   // 房租
-  if (start) {
+  if (D.rentItems) {
+    for (const [rid, rows] of Object.entries(D.rentItems)) if (out[rid]) out[rid].push(...rows);
+  } else if (start) {
     for (const r of residents) {
       if (r.isOwner || !r.moveIn) continue;
       const first = periodOf(r.moveIn, cd), last = r.moveOut ? periodOf(addDays(r.moveOut, -1), cd) : cur;
@@ -125,7 +128,8 @@ export function receivables(state, todayIso, D = {}) {
  * 先到期先抵：借方 = 正的应收项 + 退款；贷方 = 收款 + 负的应收项（减免）。
  * @returns {{ debits: Array<item & { remaining, paidOn }>, credit: number, applied: Record<string, number> }}  （都是分）
  */
-export function settle(items, payments) {
+export function settle(items, payments, assignedOnly = false) {
+  if (assignedOnly) return settleAssigned(items, payments);
   const debits = [], credits = [];
   for (const it of items) {
     if (it.unknown || it.cents == null) continue;
@@ -151,6 +155,33 @@ export function settle(items, payments) {
   return { debits, credit: credits.reduce((a, c) => a + c.left, 0) };
 }
 
+/** 指定租期的收款与退款只影响该租期，余额不自动转给其他租期。 */
+function settleAssigned(items, payments) {
+  const groups = new Map();
+  for (const p of payments) if (p.rentId) {
+    const ref = rentRef(p.rentId);
+    if (!groups.has(ref)) groups.set(ref, []);
+    groups.get(ref).push(p);
+  }
+  const debits = []; let credit = 0;
+  for (const item of items) {
+    const rows = (groups.get(item.ref) || []).sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+    groups.delete(item.ref);
+    const paid = rows.reduce((n, p) => n + cents(p.amount), 0);
+    if (item.unknown || item.cents == null) { credit += Math.max(0, paid); continue; }
+    let running = 0, paidOn = null;
+    for (const p of rows) {
+      running += cents(p.amount);
+      if (running < item.cents) paidOn = null;
+      else if (!paidOn) paidOn = p.date;
+    }
+    debits.push({ ...item, remaining: Math.max(0, item.cents - paid), paidOn });
+    credit += Math.max(0, paid - item.cents);
+  }
+  for (const rows of groups.values()) credit += Math.max(0, rows.reduce((n, p) => n + cents(p.amount), 0));
+  return { debits, credit };
+}
+
 /**
  * 整本账：每户的余额、逾期、按期统计。金额都转回美元。
  * @returns {{ people: Record<string, Person>, period: (key) => PeriodStats, current: string, cd: number }}
@@ -164,7 +195,7 @@ export function buildLedger(state, todayIso, D = {}) {
   const people = {};
   for (const [rid, list] of Object.entries(items)) {
     const payments = (pays[rid] || []).sort((a, b) => (a.date < b.date ? -1 : 1));
-    const { debits, credit } = settle(list, payments);
+    const { debits, credit } = settle(list, payments, D.assignedOnly);
     let owed = 0, overdue = 0, upcoming = 0, oldestDue = null;
     for (const d of debits) {
       owed += d.remaining;

@@ -4,10 +4,11 @@ import { t, money, date } from '../i18n.js';
 import { rentOn } from '../core/ledger.js';
 import { avatar, emptyState } from './parts.js';
 import { rentStatus } from './tenants.js';
-import { openPayment, openAdjustment, openPeriodCell, periodLabel } from './money.js';
+import { openPayment, openAdjustment } from './money.js';
 import { openResident } from './residents.js';
 import { sourceNotes } from './notes.js';
-import { historySection } from './rentHistory.js';
+import { historySection, openRentPeriod, rentRange } from './rentHistory.js';
+import { rentPeriodsFor } from '../core/rent.js';
 
 export function render(root, ctx, [id]) {
   const D = ctx.D, r = ctx.S.data.residents[id];
@@ -22,25 +23,34 @@ export function render(root, ctx, [id]) {
       h('button.btn', { type: 'button', onclick: () => openResident(ctx, r) }, t('res.edit')))));
   const notes = sourceNotes(ctx.S, 'residents', id, false); if (notes) root.append(h('section.card', null, notes));
   if (p) {
-    const keys = [...new Set(p.items.map(x => x.period))].sort().reverse();
-    if (keys.length) root.append(h('section.card', null, h('h2.section-h', null, t('rent.account')),
-      h('div.table-scroll', null, h('table.data-table', null,
-        h('thead', null, h('tr', null, [t('rent.period'), t('ledger.charge'), t('ledger.paid'), t('collect.periodLeft')].map(x => h('th', null, x)))),
-        h('tbody', null, keys.map(k => {
-          const me = D.ledger.period(k).people[id];
-          return h('tr', null, h('th', null, h('button.link-btn', { type: 'button', onclick: () => openPeriodCell(ctx, id, k) }, periodLabel(ctx, k))),
-            h('td.num', null, me.unknown ? t('st.unknown') : money(me.E)), h('td.num', null, money(me.C)), h('td.num', null, me.unknown ? '—' : money(me.left)));
-        }))))));
+    const periods = rentPeriodsFor(ctx.S, id, D.today);
+    root.append(h('section.card', null, h('div.row', null, h('h2.section-h', null, t('rent.account')), h('span.sp'),
+      h('button.btn', { type: 'button', onclick: () => openRentPeriod(ctx, id) }, '＋ ' + t('rent.customPeriod'))),
+      h('p.note', null, t('rent.periodHint')),
+      periods.length ? h('div.table-scroll', null, h('table.data-table.rent-table', null,
+        h('thead', null, h('tr', null, ['rent.dueDate', 'rent.start', 'rent.end', 'ledger.charge', 'ledger.paid', 'collect.periodLeft', ''].map(k => h('th', null, k ? t(k) : '')))),
+        h('tbody', null, [...periods].reverse().map(x => {
+          const debit = p.debits.find(d => d.rentId === x.id);
+          const paid = p.payments.filter(pay => pay.rentId === x.id).reduce((sum, pay) => sum + pay.amount, 0);
+          const item = p.items.find(i => i.rentId === x.id);
+          const expected = item && !item.unknown ? item.cents / 100 : x.amount;
+          const remaining = expected == null ? null : debit ? debit.remaining / 100 : Math.max(0, expected - paid);
+          return h('tr', null, h('th.date-cell', null, x.dueDate), h('td.date-cell', null, x.periodStart), h('td.date-cell', null, x.periodEnd),
+            h('td.num', null, expected == null ? t('st.unknown') : money(expected)), h('td.num', null, money(paid)), h('td.num', null, remaining == null ? '—' : money(remaining)),
+            h('td', null, h('div.row', null, h('button.btn', { type: 'button', onclick: () => openRentPeriod(ctx, id, x) }, t('rent.editPeriod')),
+              h('button.btn', { type: 'button', onclick: () => openPayment(ctx, { residentId: id, rentId: x.id }) }, t('rent.record')))));
+        })))) : h('p.muted', null, t('rent.scheduleMissingHint'))));
     if (p.payments.length) root.append(h('section.card', null, h('h2.section-h', null, t('rent.receipts')),
-      h('table.data-table', null, h('tbody', null, [...p.payments].reverse().map(x => h('tr', null,
-        h('th', null, date(x.date), h('div.small.muted', null, t('method.' + (x.method || 'other')), x.note ? ' · ' + x.note : '')),
+      h('table.data-table.rent-table', null, h('tbody', null, [...p.payments].reverse().map(x => h('tr', null,
+        h('th', null, date(x.date), h('div.small.muted', null, t('method.' + (x.method || 'other')), x.note ? ' · ' + x.note : ''), h('div.small', null, ctx.S.data.rents[x.rentId] && !ctx.S.data.rents[x.rentId].deleted ? rentRange(ctx.S.data.rents[x.rentId]) + ' · ' + t('rent.dueShort') + ' ' + ctx.S.data.rents[x.rentId].dueDate : t('rent.datesPending'))),
         h('td.num', null, money(x.amount)), h('td', null, h('div.row', null,
           h('button.btn', { type: 'button', onclick: () => openPayment(ctx, { payment: x }) }, t('bill.edit')),
           h('button.btn.danger', { type: 'button', onclick: () => {
           if (confirm(t('pay.deleteConfirm'))) { const prev = ctx.remove('payments', x.id); ctx.toast(t('pay.deleted'), { action: t('undo'), onAction: () => ctx.put('payments', prev) }); }
         } }, t('bill.delete'))))))))));
     root.append(h('details.card', null, h('summary', null, t('rent.adjustments')), h('p.note', null, t('rent.adjustmentsHint')),
-      h('button.btn', { type: 'button', onclick: () => openAdjustment(ctx, { residentId: id }) }, t('adj.title'))));
+      h('button.btn', { type: 'button', onclick: () => openAdjustment(ctx, { residentId: id }) }, t('adj.title')),
+      Object.values(ctx.S.data.adjustments).filter(a => !a.deleted && a.purpose === 'rent' && a.residentId === id).map(a => h('p.small', null, a.label, ' · ', money(a.amount), ' · ', ctx.S.data.rents[a.rentId] ? rentRange(ctx.S.data.rents[a.rentId]) : t('rent.datesPending'), ' ', h('button.btn', { type: 'button', onclick: () => openAdjustment(ctx, { residentId: id, adjustment: a }) }, t('bill.edit'))))));
   }
   if (!r.isOwner) root.append(historySection(ctx, id));
 }

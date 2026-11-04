@@ -22,3 +22,12 @@ test('批注及回复保留原文、作者、时间、单元格；NA 不伪造�
   assert.equal(canon(mergeStates(combined, patch)), canon(combined));
   assert.deepEqual(normalizeState(combined).data.comments, combined.data.comments);
 });
+
+test('补齐历史覆盖日期后，补导批注仍通过保留的旧日期找到同一记录', () => {
+  const state = blankState();
+  state.data.residents.r = { id:'r', name:'Example', moveIn:'2023-01-01' };
+  state.data.rents.history = { id:'history',residentId:'r',history:true,datesConfirmed:true,periodStart:'2024-01-01',periodEnd:'2024-01-31',dueDate:'2024-01-01',legacyDate:'2024-01-16' };
+  const patch = notesImport([{ sheet:'Monthly Rent',table:'Rent',data:[['Month',null,'Example'],[1,'1/16/24 - 2/15/24',true]],comments:[{row:1,column:2,cell:'C2',comments:[{text:'仍对应这一条记录'}]}] }],state);
+  assert.equal(notesFor(patch,'rents','history').length,1);
+  assert.equal(notesFor(patch,'residents','r').length,0);
+});

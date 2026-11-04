@@ -29,7 +29,7 @@ export function notesImport(dump, state, file = 'Shared Utilities.numbers') {
       const date = rentDate(cells[1]);
       if (person) {
         // NA/空白格也可能有重要批注；关联到住户和期次，不伪造付款记录。
-        const rent = live(state, 'rents').find(r => r.residentId === person.id && r.periodStart === date);
+        const rent = live(state, 'rents').find(r => r.residentId === person.id && (r.periodStart === date || r.legacyDate === date));
         target = { collection: rent ? 'rents' : 'residents', id: rent ? rent.id : person.id, residentId: person.id, periodStart: date };
         field = 'rent';
       }

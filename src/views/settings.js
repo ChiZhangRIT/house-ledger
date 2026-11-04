@@ -1,10 +1,9 @@
 // 设置：收款规则、提醒、账单方、同步、数据（导入 / 备份）、语言与外观、隐私说明
 import { h, openSheet, copyText, download, toast } from '../ui/dom.js';
-import { t, getLang, LANGS, period } from '../i18n.js';
+import { t, getLang, LANGS, month } from '../i18n.js';
 import { normalizeState, mergeStates, live, canon } from '../core/store.js';
 import { SyncError } from '../core/sync.js';
-import { periodStart, periodRange, prevPeriod, nextPeriod } from '../core/ledger.js';
-import { addDays } from '../core/dates.js';
+import { periodRange, prevPeriod, nextPeriod } from '../core/ledger.js';
 import { SPLIT_CATEGORIES } from '../core/providers.js';
 import { sourceNotes } from './notes.js';
 import { batchDocuments } from './documents.js';
@@ -23,11 +22,11 @@ export function render(root, ctx) {
   root.append(section(t('set.rules'),
     field(t('set.property'), h('input', { value: S.settings.propertyName || '', onchange: e => set('propertyName', e.target.value.trim()) })),
     h('div.field-row', null,
-      field(t('set.cycleDay'), h('input', { type: 'number', min: 1, max: 28, value: S.settings.rentCycleDay || 16, onchange: e => set('rentCycleDay', Math.min(28, Math.max(1, Number(e.target.value) || 16))) }), t('set.cycleDayHint')),
+      h('p.note', null, t('rent.scheduleSettings')),
       field(t('set.grace'), h('input', { type: 'number', min: 0, max: 31, value: S.settings.graceDays ?? 3, onchange: e => set('graceDays', Math.max(0, Number(e.target.value) || 0)) }), t('set.graceHint'))),
     field(t('set.ledgerStart'), h('select', { onchange: e => set('ledgerStart', e.target.value || null) },
       h('option', { value: '', selected: !S.settings.ledgerStart }, t('set.ledgerNone')),
-      keys.map(k => h('option', { value: k, selected: k === S.settings.ledgerStart }, t('period.m', { m: Number(k.slice(5)), y: k.slice(0, 4) }) + ' · ' + period(periodStart(k, L.cd), addDays(periodStart(nextPeriod(k), L.cd), -1))))), t('set.ledgerHint')),
+      keys.map(k => h('option', { value: k, selected: k === S.settings.ledgerStart }, month(k)))), t('set.ledgerHint')),
     field(t('set.prorate'), h('select', { onchange: e => set('prorate', e.target.value) },
       ['daily', 'full'].map(v => h('option', { value: v, selected: (S.settings.prorate || 'daily') === v }, t('set.prorate.' + v)))))));
 

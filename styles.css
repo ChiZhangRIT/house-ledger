@@ -141,6 +141,8 @@ input[type=checkbox], input[type=radio] { width: 18px; height: 18px; accent-colo
 .data-table thead th { font-size: 12.5px; color: var(--ink-3); font-weight: 600; white-space: nowrap; }
 .data-table tbody th { font-weight: 520; }
 .data-table .num { text-align: right; white-space: nowrap; }
+.rent-table .date-cell { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rent-table .date-cell .small { max-width: 180px; white-space: normal; font-weight: 400; }
 .data-table tfoot th, .data-table tfoot td { border-bottom: 0; border-top: 1px solid var(--line-2); }
 .data-table .sub { color: var(--ink-3); font-size: 12px; font-weight: 400; }
 .data-table tr.clickable { cursor: pointer; }
