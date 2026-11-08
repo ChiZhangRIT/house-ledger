@@ -1,8 +1,32 @@
 // 房租独立台账：约定租期、应收快照与实际到账各自保存。
-import { buildLedger, rentCharge } from './ledger.js';
+import { buildLedger, rentCharge, rentOn } from './ledger.js';
 import { monthRange } from './analytics.js';
-import { isISODate, addDays } from './dates.js';
-import { isHistory, rentDates, completeRentDates, rentRef, scheduledPeriods, validateRentPeriod, rentTrackingStart } from './rentPeriods.js';
+import { isISODate, addDays, daysBetween } from './dates.js';
+import { isHistory, rentDates, completeRentDates, rentRef, scheduledPeriods, validateRentPeriod, rentTrackingStart, validSchedule, monthDay, monthAfter } from './rentPeriods.js';
+
+/** 按明确覆盖日期计算建议应收；不以入住、搬出或待收起点再次截短用户填写的区间。 */
+export function calculateRentPeriod(resident, start, end, prorate = 'daily') {
+  if (!isISODate(start) || !isISODate(end) || end < start) return { amount: null, reason: 'dates', parts: [] };
+  const terms = (resident.rentSchedules || []).filter(validSchedule).sort((a, b) => a.from.localeCompare(b.from));
+  const stop = addDays(end, 1), parts = [];
+  let cursor = start, cents = 0;
+  while (cursor < stop) {
+    const term = terms.filter(x => x.from <= cursor).at(-1);
+    if (!term) return { amount: null, reason: 'schedule', parts: [] };
+    let key = cursor.slice(0, 7);
+    if (cursor < monthDay(key, term.cycleDay)) key = monthAfter(key, -1);
+    const cycleStart = monthDay(key, term.cycleDay), next = monthDay(monthAfter(key), term.cycleDay);
+    const until = [stop, next, terms.find(x => x.from > cursor)?.from].filter(Boolean).sort()[0];
+    const charge = rentCharge({ ...resident, moveIn: cursor, moveOut: until }, key, term.cycleDay, prorate);
+    if (charge.unknown) return { amount: null, reason: 'rent', parts: [] };
+    const cuts = [...new Set([cursor, ...(resident.rent || []).map(x => x.from).filter(x => x > cursor && x < until)])].sort();
+    const rates = cuts.map((from, i) => ({ amount: rentOn(resident, from), days: daysBetween(from, cuts[i + 1] || until) }));
+    parts.push({ cycleStart, cycleEnd: addDays(next, -1), days: charge.days, periodDays: charge.periodDays,
+      amount: charge.cents / 100, full: prorate === 'full' && charge.days < charge.periodDays, rates });
+    cents += charge.cents; cursor = until;
+  }
+  return { amount: cents / 100, parts };
+}
 
 export function rentState(state) {
   return { ...state, data: { ...state.data, bills: {}, rents: {}, payments: Object.fromEntries(rentPayments(state).map(p => [p.id, p])), adjustments: {} } };

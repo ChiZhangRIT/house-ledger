@@ -45,3 +45,11 @@ test('PDF 页数和关联进度不使用金额格式', () => {
   setLang('en');
   assert.equal(t('pdf.page', { n: 1, total: 4 }), 'Page 1/4');
 });
+
+test('英文房租计算区分一天与多天，并显示正确金额和天数', () => {
+  setLang('en');
+  const cycle = { start: '2023-01-16', end: '2023-02-15', days: 31 };
+  assert.match(t('rent.calculationPeriod', { ...cycle, n: 1 }), /covers 1 day\./);
+  assert.match(t('rent.calculationPeriod', { ...cycle, n: 23 }), /covers 23 days\./);
+  assert.equal(t('rent.calculationRate', { rent: 1700, n: 23, days: 31 }), '$1,700.00 × 23 ÷ 31');
+});
