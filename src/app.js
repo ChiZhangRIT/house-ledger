@@ -154,6 +154,8 @@ function render() {
   const main = $('#main');
   const sameView = main.dataset.view === name + '/' + params.join('/');
   const keep = sameView ? main.scrollTop : 0;
+  const rentList = sameView && main.querySelector('.rent-record-list');
+  const rentScroll = rentList && { top: rentList.scrollTop, left: rentList.scrollLeft };
   main.dataset.view = name + '/' + params.join('/');
   main.replaceChildren();
   const top = h('div.topbar', null, h('h1', null, name === 'bill' ? t('nav.bills') : name === 'person' ? t('nav.tenants') : t('nav.' + name)),
@@ -174,6 +176,7 @@ function render() {
         h('button.btn.danger', { type: 'button', onclick: () => { if (confirm(t('set.clearConfirm'))) { localStorage.removeItem(KEY); location.reload(); } } }, t('set.clear')))));
   }
   main.scrollTop = keep;
+  if (rentScroll) { const list = main.querySelector('.rent-record-list'); if (list) { list.scrollTop = rentScroll.top; list.scrollLeft = rentScroll.left; } }
   if (focusKey) { const el = document.querySelector(`[data-fid="${CSS.escape(focusKey)}"]`); if (el) el.focus({ preventScroll: true }); }
   else if (!sameView && !document.querySelector('dialog[open]') && main.contains(active) === false && active !== document.body) main.focus({ preventScroll: true });   // 换页后读屏、键盘从新页面开始
 }

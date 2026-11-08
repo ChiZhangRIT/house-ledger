@@ -55,16 +55,42 @@ export function openSheet({ title, body, foot, wide, onClose, beforeClose, close
   const close = () => { if (dlg.open) dlg.close(); };
   const tryClose = () => { if (!beforeClose || beforeClose() !== false) close(); };   // beforeClose 返回 false 时不关（比如有没保存的修改）
   const titleEl = h('h2', null, title);
+  const head = h('div.sheet-head', null, titleEl, h('button.icon-btn', { type: 'button', 'aria-label': closeLabel, onclick: tryClose }, '✕'));
   dlg.append(
-    h('div.sheet-head', null, titleEl, h('button.icon-btn', { type: 'button', 'aria-label': closeLabel, onclick: tryClose }, '✕')),
+    head,
     bodyEl,
   );
+  let drag = null, moved = false;
+  const place = (left, top) => {
+    const rect = dlg.getBoundingClientRect();
+    Object.assign(dlg.style, { margin: '0', inset: 'auto',
+      left: Math.max(8, Math.min(left, innerWidth - rect.width - 8)) + 'px',
+      top: Math.max(8, Math.min(top, innerHeight - rect.height - 8)) + 'px' });
+  };
+  head.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || innerWidth < 720 || e.target.closest('button')) return;
+    const rect = dlg.getBoundingClientRect();
+    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, left: rect.left, top: rect.top };
+    head.setPointerCapture(e.pointerId); e.preventDefault();
+  });
+  head.addEventListener('pointermove', e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    moved = true; place(drag.left + e.clientX - drag.x, drag.top + e.clientY - drag.y);
+  });
+  for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) head.addEventListener(event, () => { drag = null; });
+  const fit = () => {
+    if (!moved) return;
+    if (innerWidth < 720) { dlg.style.margin = ''; dlg.style.inset = ''; dlg.style.left = ''; dlg.style.top = ''; moved = false; }
+    else { const rect = dlg.getBoundingClientRect(); place(rect.left, rect.top); }
+  };
+  const observer = new ResizeObserver(fit);
+  observer.observe(dlg); window.addEventListener('resize', fit);
   dlg.addEventListener('cancel', e => { e.preventDefault(); tryClose(); });
   const sheet = { el: dlg, body: bodyEl, close, tryClose, setTitle: (x) => { titleEl.textContent = x; } };
   const content = typeof body === 'function' ? body(sheet) : body;
   if (content) bodyEl.append(content);
   if (foot && foot.length) dlg.append(h('div.sheet-foot', null, foot));
-  dlg.addEventListener('close', () => { dlg.remove(); if (onClose) onClose(); });
+  dlg.addEventListener('close', () => { observer.disconnect(); window.removeEventListener('resize', fit); dlg.remove(); if (onClose) onClose(); });
   // 点遮罩关闭：按下和松开都在遮罩上才算（在输入框里拖选文字、松手落到遮罩上不算）
   let downOnBackdrop = false;
   dlg.addEventListener('pointerdown', e => { downOnBackdrop = e.target === dlg; });

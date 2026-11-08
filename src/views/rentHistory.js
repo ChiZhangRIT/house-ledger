@@ -2,7 +2,7 @@
 import { h, openSheet } from '../ui/dom.js';
 import { t, money } from '../i18n.js';
 import { newId } from '../core/store.js';
-import { validateRentRecord, calculateRentPeriod, rentPayments, rentReceiptChanges } from '../core/rent.js';
+import { validateRentRecord, calculateRentPeriod, rentRecordEntries } from '../core/rent.js';
 import { isHistory, rentDates } from '../core/rentPeriods.js';
 import { parseAmount } from '../ui/parse.js';
 
@@ -63,24 +63,7 @@ export function openRentPeriod(ctx, residentId, record, { onSave } = {}) {
     if (error) { err.textContent = t('rent.historyError.' + error); err.hidden = false; return; }
     ctx.put('rents', rec); dirty = false; sheet.close(); ctx.toast(t('res.saved')); onSave?.(rec);
   };
-  const remove = () => {
-    const confirmation = openSheet({ title: t('bill.delete'), closeLabel: t('rent.close'), body: h('p', null, t('rent.recordDeleteConfirm')),
-      foot: [h('span.sp'), h('button.btn', { type: 'button', onclick: () => confirmation.close() }, t('cancel')),
-        h('button.btn.danger', { type: 'button', onclick: () => {
-          const prev = ctx.S.data.rents[record.id] || record;
-          ctx.batch(() => {
-            const receipt = rentPayments(ctx.S).find(x => x.embeddedRentId === record.id);
-            if (receipt) {
-              const changes = rentReceiptChanges(ctx.S, receipt);
-              ctx.put('rents', changes.rent); ctx.put('payments', changes.receipt);
-            }
-            if (!ctx.S.data.rents[record.id]) ctx.put('rents', record);
-            ctx.remove('rents', record.id);
-          });
-          confirmation.close(); dirty = false; sheet.close(); onSave?.();
-          ctx.toast(t('rent.recordDeleted'), { action: t('undo'), onAction: () => { ctx.put('rents', prev); onSave?.(); }, ms: 10000 });
-        } }, t('bill.delete'))] });
-  };
+  const remove = () => deleteRentRecord(ctx, record, () => { dirty = false; sheet.close(); onSave?.(); });
   const sheet = openSheet({ title: t(record ? 'rent.editCharge' : 'rent.newPeriod'), closeLabel: t('rent.close'), wide: true,
     body: h('form.form', { onsubmit: e => { e.preventDefault(); save(); } },
       h('p', null, ctx.S.data.residents[residentId].name),
@@ -97,4 +80,25 @@ export function openRentPeriod(ctx, residentId, record, { onSave } = {}) {
     beforeClose: () => !dirty || confirm(t('form.discard')),
   });
   return sheet;
+}
+
+/** 删除整行，包括只属于这一租期的收支；完整快照可撤销或从最近删除恢复。 */
+export function deleteRentRecord(ctx, record, onChange) {
+  const confirmation = openSheet({ title: t('rent.deleteRecord'), closeLabel: t('rent.close'), body: h('div', null,
+    h('p', null, rentRange(record)), h('p', null, t('rent.rowDeleteConfirm'))),
+    foot: [h('span.sp'), h('button.btn', { type: 'button', onclick: () => confirmation.close() }, t('cancel')),
+      h('button.btn.danger', { type: 'button', onclick: () => {
+        const entries = rentRecordEntries(ctx.S, record);
+        ctx.batch(() => {
+          for (const [collection, entry] of entries) {
+            if (!ctx.S.data[collection][entry.id]) ctx.put(collection, entry);
+            ctx.remove(collection, entry.id);
+          }
+        });
+        confirmation.close(); onChange?.();
+        ctx.toast(t('rent.recordDeleted'), { action: t('undo'), onAction: () => {
+          ctx.batch(() => { for (const [collection, entry] of entries) ctx.put(collection, entry); });
+          onChange?.();
+        }, ms: 10000 });
+      } }, t('bill.delete'))] });
 }

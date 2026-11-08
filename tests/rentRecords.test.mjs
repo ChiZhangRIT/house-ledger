@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { blankState, normalizeState, deletedRecord, restoredRecord, canon, mergeStates } from '../src/core/store.js';
-import { rentPeriodsFor, buildRentLedger, rentReceipts, rentRecordSummary, rentPayments, rentReceiptChanges, rentPeriodSummary } from '../src/core/rent.js';
+import { rentPeriodsFor, buildRentLedger, rentReceipts, rentRecordSummary, rentPayments, rentReceiptChanges, rentPeriodSummary, rentRecordEntries } from '../src/core/rent.js';
 import { scheduledPeriods, validateRentPeriod } from '../src/core/rentPeriods.js';
 
 function fixture() {
@@ -152,4 +152,33 @@ test('同一期多笔收款、退款和减免归入一行；待补金额不当�
   s.data.payments.unknown={id:'unknown',residentId:'r',purpose:'rent',rentId:'p',amount:null,date:'',confirmationOnly:true};
   assert.equal(rentPeriodSummary(s,period).remaining,null);
   assert.equal(rentPeriodSummary(s,period).incomplete,true);
+});
+
+test('删除待确认行连同本行收支可恢复，不误删相邻自动租期或其他住户的付款', () => {
+  const s = fixture();
+  const old = s.data.rents.old = { id: 'old', residentId: 'r', legacyDate: '2022-10-16', paid: true,
+    receivedAmount: 1700, paidDate: '2022-10-15', note: '保留这条备注' };
+  s.data.payments.extra = { id: 'extra', residentId: 'r', purpose: 'rent', rentId: 'old', amount: 100, date: '2022-10-16' };
+  s.data.payments.refund = { id: 'refund', residentId: 'r', purpose: 'rent', rentId: 'old', amount: -50, date: '2022-10-17' };
+  s.data.adjustments.a = { id: 'a', residentId: 'r', purpose: 'rent', rentId: 'old', amount: -50, collectPeriod: '2022-10' };
+  s.data.payments.other = { id: 'other', residentId: 'someone-else', purpose: 'rent', rentId: 'old', amount: 900, date: '2022-10-15' };
+  const auto = rentPeriodsFor(s, 'r', '2023-03-01').find(x => x.periodStart === '2022-10-16');
+  const entries = rentRecordEntries(s, rentPeriodsFor(s, 'r', '2023-03-01').find(x => x.id === 'old'));
+  assert.equal(entries[0][1], old);
+  assert.deepEqual(entries.map(([c, r]) => [c, r.id]), [['rents', 'old'], ['payments', 'extra'], ['payments', 'refund'], ['adjustments', 'a']]);
+  const before = structuredClone(s);
+  for (const [collection, entry] of entries) s.data[collection][entry.id] = deletedRecord(entry, 200);
+  const synced = normalizeState(mergeStates(before, s));
+  assert.equal(rentPeriodsFor(synced, 'r', '2023-03-01').some(x => x.id === 'old'), false);
+  assert.equal(rentPeriodsFor(synced, 'r', '2023-03-01').some(x => x.id === auto.id), true);
+  assert.equal(rentPayments(synced).some(x => x.rentId === 'old' && x.residentId === 'r'), false);
+  assert.equal(synced.data.payments.other.deleted, undefined);
+  for (const [collection, entry] of entries) synced.data[collection][entry.id] = restoredRecord(collection, synced.data[collection][entry.id], null, 300);
+  assert.equal(synced.data.rents.old.note, old.note);
+  assert.deepEqual(rentReceipts(synced).values, [1750]);
+  const automatic = rentRecordEntries(synced, auto);
+  assert.equal(automatic.length, 1);
+  synced.data.rents[auto.id] = deletedRecord(automatic[0][1], 400);
+  assert.equal(rentPeriodsFor(synced, 'r', '2023-03-01').some(x => x.id === auto.id), false);
+  assert.equal(rentPayments(synced).filter(x => x.rentId === 'old' && x.residentId === 'r').length, 3);
 });

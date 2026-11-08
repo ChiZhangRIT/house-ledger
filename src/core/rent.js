@@ -79,7 +79,7 @@ export function rentPayments(state) {
   const embedded = Object.values(state.data.rents).filter(r => !r.deleted && r.paid && !state.data.payments['receipt:' + r.id])
     .map(r => ({ id: 'receipt:' + r.id, residentId: r.residentId, rentId: r.id, purpose: 'rent',
       amount: r.receivedAmount ?? null, date: isISODate(r.paidDate) ? r.paidDate : '', note: r.receiptNote || '',
-      method: r.receiptMethod || 'other', embeddedRentId: r.id, confirmationOnly: !knownAmount(r), updatedAt: r.updatedAt }));
+      method: r.receiptMethod || '', embeddedRentId: r.id, confirmationOnly: !knownAmount(r), updatedAt: r.updatedAt }));
   return [...Object.values(state.data.payments).filter(p => !p.deleted && p.purpose === 'rent'), ...embedded];
 }
 /** 仅在用户编辑或删除旧收款时转换；固定 id 避免重导或同步时把同一笔钱统计两次。 */
@@ -87,6 +87,13 @@ export function rentReceiptChanges(state, payment) {
   const { embeddedRentId, ...receipt } = payment;
   const original = embeddedRentId && state.data.rents[embeddedRentId];
   return { receipt, rent: original ? { ...original, paid: false, receivedAmount: null, paidDate: null } : null };
+}
+/** 行级删除的快照：旧的内含收款随租期保存，独立收支按同一住户、同一租期收集。 */
+export function rentRecordEntries(state, period) {
+  return [['rents', state.data.rents[period.id] || period],
+    ...['payments', 'adjustments'].flatMap(collection => Object.values(state.data[collection])
+      .filter(x => !x.deleted && x.purpose === 'rent' && x.residentId === period.residentId && x.rentId === period.id)
+      .map(x => [collection, x]))];
 }
 export function rentPeriodSummary(state, period) {
   const receipts = rentPayments(state).filter(x => x.residentId === period.residentId && x.rentId === period.id);

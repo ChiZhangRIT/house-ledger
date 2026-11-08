@@ -680,6 +680,8 @@ Object.assign(zh, {
   'rent.emptyRecords': '还没有房租记录。可以先记收款，再补覆盖日期和租金约定。',
   'rent.refundAmount': '实际退款金额（USD）', 'rent.refundDate': '实际退款日期',
   'rent.receiptsBreakdown': '已收 {paid}，已退 {amount}。',
+  'rent.paymentMethod': '支付方式', 'rent.methodPending': '方式待补', 'rent.actions': '操作', 'rent.deleteRecord': '删除房租记录',
+  'rent.rowDeleteConfirm': '这行对应的租期、收款、退款和调整将一并移到「最近删除」，不会影响其他租期。可撤销本次删除，也可在「设置 → 最近删除」分别恢复。删除的租期不会自动生成。',
 });
 Object.assign(en, {
   'notes.edit': 'Edit note', 'notes.delete': 'Delete note', 'notes.deleteConfirm': 'Delete this note and its replies? You can undo the deletion.',
@@ -693,6 +695,8 @@ Object.assign(en, {
   'rent.emptyRecords': 'No rent records yet. Record a receipt first; add coverage and the rent agreement later.',
   'rent.refundAmount': 'Actual refund amount (USD)', 'rent.refundDate': 'Actual refund date',
   'rent.receiptsBreakdown': 'Received {paid}; refunded {amount}.',
+  'rent.paymentMethod': 'Payment method', 'rent.methodPending': 'Method needed', 'rent.actions': 'Actions', 'rent.deleteRecord': 'Delete rent record',
+  'rent.rowDeleteConfirm': 'Move this period and its receipts, refunds and adjustments to Recently deleted? Other periods are unaffected. Undo restores them together; they can also be restored individually in Settings → Recently deleted. The deleted period will not be generated again.',
 });
 
 export const STRINGS = { 'zh-Hans': zh, en };
