@@ -128,11 +128,26 @@ test('日期不全的历史记录、完整租期、收款关联与批注可经�
   assert.equal(reload.data.comments.note.target.id,'old');
 });
 
-test('首期跨月截短时，交租月份以实际覆盖开始月为准，与界面约定一致', () => {
+test('首期跨月截短时，保留常规租期的交租月份，不随实际入住日后移', () => {
   const s = fixture(); s.settings.ledgerStart='2026-01';
   const r = s.data.residents.b;
   const first = scheduledPeriods(s,r,'2026-01-10')[0];
-  assert.deepEqual([first.periodStart,first.periodEnd,first.dueDate],['2026-01-01','2026-01-15','2026-01-10']);
+  assert.deepEqual([first.periodStart,first.periodEnd,first.dueDate],['2026-01-01','2026-01-15','2025-12-10']);
+});
+
+test('10月1日入住：9月15日交首期，10月15日交10月16日至11月15日，保存后不重算旧日期', () => {
+  const s = blankState();
+  const r = s.data.residents.r = { id: 'r', name: 'Test', moveIn: '2022-10-01', rentTrackingStart: '2022-10-01',
+    rent: [{ from: '2022-10-01', amount: 1000 }],
+    rentSchedules: [{ from: '2022-09-01', cycleDay: 16, dueDay: 15, dueMonthOffset: 0 }] };
+  const rows = scheduledPeriods(s, r, '2022-10-01', 1);
+  assert.deepEqual(rows.slice(0, 2).map(x => [x.dueDate, x.periodStart, x.periodEnd]), [
+    ['2022-09-15', '2022-10-01', '2022-10-15'],
+    ['2022-10-15', '2022-10-16', '2022-11-15'],
+  ]);
+  s.data.rents[rows[0].id] = { ...rows[0], dueDate: '2022-10-15', amount: 500 };
+  assert.equal(buildRentLedger(s, '2022-10-20').people.r.items.find(x => x.rentId === rows[0].id).due, '2022-10-15');
+  assert.equal(scheduledPeriods(s, r, '2022-10-01', 1)[0].periodStart, '2022-10-16');
 });
 
 test('每位住户分别按完整日期开始跟踪，跨月租期不受全屋月份限制', () => {

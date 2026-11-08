@@ -61,7 +61,7 @@ export function scheduledPeriods(state, resident, today, future = 2) {
       const endExclusive = [next, terms[i + 1]?.from, resident.moveOut].filter(Boolean).sort()[0];
       if (start >= endExclusive || start < cutoff) continue;
       const rec = { id: `rp:${resident.id}:${start}`, residentId: resident.id, history: false, datesConfirmed: true,
-        periodStart: start, periodEnd: addDays(endExclusive, -1), dueDate: monthDay(monthAfter(start, term.dueMonthOffset), term.dueDay),
+        periodStart: start, periodEnd: addDays(endExclusive, -1), dueDate: monthDay(monthAfter(key, term.dueMonthOffset), term.dueDay),
         nominalKey: key, cycleDay: term.cycleDay };
       if (state.data.rents[rec.id]?.deleted || saved.some(r => r.id === rec.id || rentOverlap(r, rec))) continue;
       out.push(rec);

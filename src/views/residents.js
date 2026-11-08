@@ -66,7 +66,7 @@ function timeline(D) {
 /** 编辑 / 新建住户 */
 export function openResident(ctx, r) {
   const isNew = !r;
-  const w = r ? JSON.parse(JSON.stringify(r)) : { id: 'r_' + newId(), name: '', moveIn: ctx.D.today, moveOut: null, weights: [], utilities: { energy: 'share', water: 'share', internet: 'share' }, rent: [], rentTrackingStart: null, isOwner: !ctx.D.residents.some(x => x.isOwner) };
+  const w = r ? JSON.parse(JSON.stringify(r)) : { id: 'r_' + newId(), name: '', moveIn: ctx.D.today, moveOut: null, weights: [], utilities: { energy: 'share', water: 'share', internet: 'share' }, rent: [], rentTrackingStart: ctx.D.today, isOwner: !ctx.D.residents.some(x => x.isOwner) };
   w.rentTrackingStart = rentTrackingStart(ctx.S, w);
   w.rentSchedules = w.rentSchedules || []; w.weights = w.weights || []; w.rent = w.rent || []; w.utilities = w.utilities || {};
   let dirty = false;
@@ -129,16 +129,17 @@ export function openResident(ctx, r) {
   };
   const schedules = h('div');
   const drawSchedules = () => schedules.replaceChildren(...w.rentSchedules.map((x, i) => {
-    const example = h('p.note');
+    const example = h('div');
     const preview = () => {
-      const rows = scheduledPeriods({ ...ctx.S, data: { ...ctx.S.data, rents: {} } }, { ...w, rentTrackingStart: x.from, rentSchedules: [x] }, x.from || ctx.D.today, 1);
-      const first = rows[0];
-      example.textContent = first ? t('rent.scheduleExample', { due: first.dueDate, start: first.periodStart, end: first.periodEnd }) : '';
+      const rows = isISODate(w.moveIn) && isISODate(x.from)
+        ? scheduledPeriods({ ...ctx.S, data: { ...ctx.S.data, rents: {} } }, { ...w, rentTrackingStart: x.from, rentSchedules: [x] }, [x.from, w.moveIn].sort().at(-1), 1) : [];
+      example.replaceChildren(...rows.slice(0, 2).map((row, index) => h('p.note', null,
+        t(index ? 'rent.nextExample' : 'rent.scheduleExample', { due: row.dueDate, start: row.periodStart, end: row.periodEnd }))));
     };
     const input = (key, label, type) => h('label.field', null, h('span.field-label', null, t(label)), h('input', { type, min: type === 'number' ? 1 : undefined, max: type === 'number' ? 31 : undefined, value: x[key], oninput: e => { x[key] = type === 'number' ? Number(e.target.value) : e.target.value; dirty = true; preview(); } }));
     preview();
-    return h('fieldset', null, h('div.field-row', null, input('from', 'rent.effectiveFrom', 'date'), input('cycleDay', 'rent.cycleDay', 'number')),
-      h('div.field-row', null, h('label.field', null, h('span.field-label', null, t('rent.dueMonth')), h('select', { onchange: e => { x.dueMonthOffset = Number(e.target.value); dirty = true; preview(); } }, [-1, 0, 1].map(n => h('option', { value: n, selected: x.dueMonthOffset === n }, t('rent.dueMonth.' + n))))), input('dueDay', 'rent.dueDay', 'number')),
+    return h('fieldset', null, h('div.field-row', null, input('from', 'rent.effectiveFrom', 'date'), input('dueDay', 'rent.dueDay', 'number')),
+      h('div.field-row', null, input('cycleDay', 'rent.cycleDay', 'number'), h('label.field', null, h('span.field-label', null, t('rent.dueMonth')), h('select', { onchange: e => { x.dueMonthOffset = Number(e.target.value); dirty = true; preview(); } }, [-1, 0, 1].map(n => h('option', { value: n, selected: x.dueMonthOffset === n }, t('rent.dueMonth.' + n)))))),
       example, h('button.link-btn', { type: 'button', onclick: () => { w.rentSchedules.splice(i, 1); dirty = true; drawSchedules(); } }, t('form.remove')));
   }), h('button.btn', { type: 'button', onclick: () => {
     const savedEnd = Object.values(ctx.S.data.rents).filter(x => !x.deleted && x.history === false && x.residentId === w.id).map(x => x.periodEnd).sort().at(-1);
@@ -146,10 +147,16 @@ export function openResident(ctx, r) {
     dirty = true; drawSchedules();
   } }, '＋ ' + t('rent.addSchedule')));
   drawSchedules();
+  const trackingInput = h('input', { type: 'date', value: w.rentTrackingStart || '', oninput: e => {
+    w.rentTrackingStart = e.target.value || null; trackingReset.hidden = w.rentTrackingStart === w.moveIn; dirty = true;
+  } });
+  const trackingReset = h('button.link-btn', { type: 'button', hidden: w.rentTrackingStart === w.moveIn, onclick: () => {
+    w.rentTrackingStart = w.moveIn; trackingInput.value = w.moveIn; trackingReset.hidden = true; dirty = true;
+  } }, t('rent.useMoveIn'));
   const rentBox = h('fieldset', { hidden: !!w.isOwner }, h('legend', null, t('res.rent')),
+    h('p.note', null, t('res.rentHint')), listEl(w.rent, 'amount', '$', parseAmount), h('h3', null, t('rent.schedule')), h('p.note', null, t('rent.scheduleHint')), schedules,
     h('label.field', null, h('span.field-label', null, t('rent.trackingStart')),
-      h('input', { type: 'date', value: w.rentTrackingStart || '', oninput: e => { w.rentTrackingStart = e.target.value || null; dirty = true; } }), h('span.hint', null, t('rent.trackingHint'))),
-    h('p.note', null, t('res.rentHint')), listEl(w.rent, 'amount', '$', parseAmount), h('h3', null, t('rent.schedule')), h('p.note', null, t('rent.scheduleHint')), schedules);
+      trackingInput, h('span.hint', null, t('rent.trackingHint'))), trackingReset);
   const sheet = openSheet({
     title: isNew ? t('res.add') : t('res.edit'), wide: true,
     body: h('div.form', null,
@@ -157,7 +164,12 @@ export function openResident(ctx, r) {
         h('label.field', null, h('span.field-label', null, t('res.name')), h('input', { value: w.name, oninput: e => { w.name = e.target.value; dirty = true; } })),
         h('label.field', null, h('span.field-label', null, t('res.shortName')), h('input', { value: w.shortName || '', placeholder: t('res.shortNamePh'), oninput: e => { w.shortName = e.target.value || undefined; dirty = true; } }))),
       h('div.field-row', null,
-        h('label.field', null, h('span.field-label', null, t('res.moveIn')), h('input', { type: 'date', value: w.moveIn || '', oninput: e => { w.moveIn = e.target.value; dirty = true; } })),
+        h('label.field', null, h('span.field-label', null, t('res.moveIn')), h('input', { type: 'date', value: w.moveIn || '', oninput: e => {
+          const followMoveIn = w.rentTrackingStart === w.moveIn;
+          w.moveIn = e.target.value;
+          if (followMoveIn) { w.rentTrackingStart = w.moveIn; trackingInput.value = w.moveIn; }
+          trackingReset.hidden = w.rentTrackingStart === w.moveIn; dirty = true; drawSchedules();
+        } })),
         h('label.field', null, h('span.field-label', null, t('res.moveOut')), h('input', { type: 'date', value: w.moveOut || '', oninput: e => { w.moveOut = e.target.value || null; dirty = true; } }), h('span.hint', null, t('res.moveOutHint')))),
       h('label.check-line', null, h('input', { type: 'checkbox', checked: !!w.isOwner, onchange: e => { w.isOwner = e.target.checked; rentBox.hidden = w.isOwner; dirty = true; } }), h('span', null, t('res.isOwner'))),
       rentBox,
