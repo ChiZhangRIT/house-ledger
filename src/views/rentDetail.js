@@ -4,7 +4,7 @@ import { t, money, date } from '../i18n.js';
 import { rentPeriodsFor, rentPeriodSummary } from '../core/rent.js';
 import { statusChip } from './parts.js';
 import { openPayment, openAdjustment } from './money.js';
-import { openRentPeriod, rentRange } from './rentHistory.js';
+import { openRentPeriod, rentRange, deleteRentRecord } from './rentHistory.js';
 import { recordNotes } from './notes.js';
 
 export function rentPeriodStatus(summary) {
@@ -26,7 +26,8 @@ export function openRentDetail(ctx, residentId, record) {
       h('div.row', null,
         h('button.link-btn', { type: 'button', onclick: () => openPayment(ctx, { residentId, rentId: period.id, refund: true, onSave: draw }) }, t('rent.recordRefund')),
         h('button.link-btn', { type: 'button', onclick: () => openAdjustment(ctx, { residentId, rentId: period.id, onSave: draw }) }, t('rent.adjustments')),
-        h('button.link-btn', { type: 'button', onclick: () => openRentPeriod(ctx, residentId, period, { onSave: draw }) }, t('rent.editCharge'))));
+        h('button.link-btn', { type: 'button', onclick: () => openRentPeriod(ctx, residentId, period, { onSave: draw }) }, t('rent.editCharge')),
+        h('button.link-btn.danger', { type: 'button', onclick: () => deleteRentRecord(ctx, period, draw) }, t('rent.deleteRecord'))));
     const receipts = h('div.rent-transactions');
     for (const payment of [...summary.receipts].sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))) {
       receipts.append(h('div.rent-transaction', null,

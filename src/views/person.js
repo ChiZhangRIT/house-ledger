@@ -5,10 +5,10 @@ import { rentOn } from '../core/ledger.js';
 import { rentPeriodsFor, rentPeriodSummary } from '../core/rent.js';
 import { avatar, emptyState, statusChip } from './parts.js';
 import { rentStatus } from './tenants.js';
-import { openPayment, openAdjustment, deleteRentPayment } from './money.js';
+import { openPayment, openAdjustment } from './money.js';
 import { openResident } from './residents.js';
 import { recordNotes } from './notes.js';
-import { openRentPeriod, rentRange, deleteRentRecord } from './rentHistory.js';
+import { openRentPeriod, rentRange } from './rentHistory.js';
 import { openRentDetail, rentPeriodStatus } from './rentDetail.js';
 
 export function render(root, ctx, [id]) {
@@ -40,20 +40,18 @@ export function render(root, ctx, [id]) {
       h('th', { scope: 'row' }, h('button.rent-record-open', { type: 'button', onclick: open }, rentRange(period),
         h('span.small.muted.block', null, t('rent.dueDate'), ' · ', period.dueDate ? date(period.dueDate, 'iso') : t('rent.datesPending')))),
       h('td.num', null, money(summary.expected)), h('td.num', null, summary.net == null ? t('rent.amountMissing') : money(summary.net)),
-      transactions(summary.receipts), h('td.rent-record-status', null, rentPeriodStatus(summary)),
-      h('td', null, h('button.link-btn.danger', { type: 'button', 'aria-label': t('rent.deleteRecord') + ' · ' + rentRange(period), onclick: () => deleteRentRecord(ctx, period) }, t('bill.delete')))));
+      transactions(summary.receipts), h('td.rent-record-status', null, rentPeriodStatus(summary))));
   }
   for (const payment of p.unassignedPayments) {
     const open = () => openPayment(ctx, { residentId: id, payment });
     rows.append(h('tr.rent-record-row', { onclick: e => { if (!e.target.closest('button')) open(); } },
       h('th', { scope: 'row' }, h('button.rent-record-open', { type: 'button', onclick: open }, t('rent.coverageLater'))),
       h('td.num', null, '—'), h('td.num', null, payment.amount == null ? t('rent.amountMissing') : money(payment.amount)),
-      transactions([payment]), h('td.rent-record-status', null, statusChip('unknown', t('rent.incomplete'))),
-      h('td', null, h('button.link-btn.danger', { type: 'button', 'aria-label': t('rent.deleteRecord') + ' · ' + t('rent.coverageLater'), onclick: () => deleteRentPayment(ctx, payment) }, t('bill.delete')))));
+      transactions([payment]), h('td.rent-record-status', null, statusChip('unknown', t('rent.incomplete')))));
   }
   const list = h('div.rent-record-list', { tabindex: '0', role: 'region', 'aria-label': t('rent.account') },
     h('table.rent-record-table', null, h('thead', null, h('tr', null,
-      [t('rent.coverageDates'), t('ledger.charge'), t('rent.netReceived'), t('rent.receivedDate'), t('rent.paymentMethod'), t('rent.paymentStatus'), t('rent.actions')]
+      [t('rent.coverageDates'), t('ledger.charge'), t('rent.netReceived'), t('rent.receivedDate'), t('rent.paymentMethod'), t('rent.paymentStatus')]
         .map((label, i) => h('th' + (i === 1 || i === 2 ? '.num' : ''), { scope: 'col' }, label)))), rows));
   if (!periods.length && !p.unassignedPayments.length) list.replaceChildren(h('p.muted', null, t('rent.emptyRecords')));
   const more = h('details.rent-more', null, h('summary', null, t('rent.more')),
