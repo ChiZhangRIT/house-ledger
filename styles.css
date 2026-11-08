@@ -267,6 +267,20 @@ input.missing { border-color: var(--critical); box-shadow: 0 0 0 1px var(--criti
 .row-line select { width: auto; flex: 1; }
 .row-line .unit { width: 46px; color: var(--ink-3); font-size: 13px; }
 .row-actions { margin-top: 2px; }
+.rent-settings { display: grid; gap: 14px; }
+.rent-settings[hidden] { display: none; }
+.rent-settings .field[hidden] { display: none; }
+.rent-settings > fieldset > .note { margin: 0; }
+.rent-amount-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 8px; }
+.rent-amount-row .amt { width: 100%; }
+.rent-schedule-entry { display: flex; flex-direction: column; gap: 10px; padding-bottom: 12px; margin-bottom: 10px; border-bottom: 1px solid var(--line); }
+.rent-setting-summary, .rent-period-preview { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); font-size: 13px; }
+.rent-setting-summary { border-left: 3px solid var(--accent); }
+.rent-period-preview > .note:first-child { margin-top: 0; }
+@media (max-width: 420px) {
+  .rent-amount-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .rent-amount-row > .field:first-child { grid-column: 1 / -1; }
+}
 .amt-line { display: flex; align-items: center; gap: 6px; }
 .amt-line input { flex: 1; min-width: 0; }
 .sign-btn { flex: none; font-size: 16px; font-weight: 700; border: 1px solid var(--line-2); }

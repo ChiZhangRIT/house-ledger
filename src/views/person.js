@@ -42,7 +42,7 @@ export function render(root, ctx, [id]) {
             h('td.num', null, expected == null ? t('st.unknown') : money(expected)), h('td.num', null, money(paid)), h('td.num', null, remaining == null ? '—' : money(remaining)),
             h('td', null, h('div.row', null, h('button.btn', { type: 'button', onclick: () => openRentPeriod(ctx, id, x) }, t('rent.editPeriod')),
               h('button.btn', { type: 'button', onclick: () => openPayment(ctx, { residentId: id, rentId: x.id }) }, t('rent.record')))));
-        })))) : h('p.muted', null, t('rent.scheduleMissingHint'))));
+        })))) : h('p.muted', null, t(p.scheduleMissing ? 'rent.scheduleMissingHint' : 'rent.noTrackedPeriods'))));
     if (p.payments.length) root.append(h('section.card', null, h('h2.section-h', null, t('rent.receipts')),
       h('table.data-table.rent-table', null, h('tbody', null, [...p.payments].reverse().map(x => h('tr', null,
         h('th', null, date(x.date), h('div.small.muted', null, t('method.' + (x.method || 'other')), x.note ? ' · ' + x.note : ''), h('div.small', null, ctx.S.data.rents[x.rentId] && !ctx.S.data.rents[x.rentId].deleted ? rentRange(ctx.S.data.rents[x.rentId]) + ' · ' + t('rent.dueShort') + ' ' + ctx.S.data.rents[x.rentId].dueDate : t('rent.datesPending'))),
