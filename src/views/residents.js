@@ -79,7 +79,7 @@ export function openResident(ctx, r) {
       h('input', { type: 'date', value: x.from || '', oninput: e => { x.from = e.target.value; dirty = true; } }),
       h('input.amt', { inputmode: 'decimal', value: x[field] ?? '', placeholder: unitLabel, oninput: e => { x[field] = parse(e.target.value); dirty = true; } }),
       h('button.icon-btn', { type: 'button', 'aria-label': t('form.remove'), onclick: () => { arr.splice(i, 1); dirty = true; draw(); } }, '✕'))),
-    h('div.row-actions', null, h('button.link-btn', { type: 'button', onclick: () => { arr.push({ from: ctx.D.today, [field]: null }); draw(); } }, '＋ ' + t('res.addRow'))));
+    h('div.row-actions', null, h('button.link-btn', { type: 'button', onclick: () => { arr.push({ from: ctx.D.today, [field]: null }); draw(); } }, '＋ ' + t(field === 'amount' ? 'res.addRent' : 'res.addRow'))));
     draw();
     return box;
   };
@@ -139,7 +139,7 @@ export function openResident(ctx, r) {
     const input = (key, label, type) => h('label.field', null, h('span.field-label', null, t(label)), h('input', { type, min: type === 'number' ? 1 : undefined, max: type === 'number' ? 31 : undefined, value: x[key], oninput: e => { x[key] = type === 'number' ? Number(e.target.value) : e.target.value; dirty = true; preview(); } }));
     preview();
     return h('fieldset', null, h('div.field-row', null, input('from', 'rent.effectiveFrom', 'date'), input('dueDay', 'rent.dueDay', 'number')),
-      h('div.field-row', null, input('cycleDay', 'rent.cycleDay', 'number'), h('label.field', null, h('span.field-label', null, t('rent.dueMonth')), h('select', { onchange: e => { x.dueMonthOffset = Number(e.target.value); dirty = true; preview(); } }, [-1, 0, 1].map(n => h('option', { value: n, selected: x.dueMonthOffset === n }, t('rent.dueMonth.' + n)))))),
+      h('div.field-row', null, h('label.field', null, h('span.field-label', null, t('rent.dueMonth')), h('select', { onchange: e => { x.dueMonthOffset = Number(e.target.value); dirty = true; preview(); } }, [-1, 0, 1].map(n => h('option', { value: n, selected: x.dueMonthOffset === n }, t('rent.dueMonth.' + n))))), input('cycleDay', 'rent.cycleDay', 'number')),
       example, h('button.link-btn', { type: 'button', onclick: () => { w.rentSchedules.splice(i, 1); dirty = true; drawSchedules(); } }, t('form.remove')));
   }), h('button.btn', { type: 'button', onclick: () => {
     const savedEnd = Object.values(ctx.S.data.rents).filter(x => !x.deleted && x.history === false && x.residentId === w.id).map(x => x.periodEnd).sort().at(-1);

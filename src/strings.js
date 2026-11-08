@@ -124,7 +124,7 @@ const zh = {
   'res.name': '名字', 'res.shortName': '明细里用的名字', 'res.shortNamePh': '可以不填', 'res.moveIn': '入住日期', 'res.moveOut': '搬出日期', 'res.moveOutHint': '还住着就留空。',
   'res.isOwner': '这是我（主租客：账单付给公司，向室友收钱）', 'res.weights': '权重', 'res.weightsHint': '从哪天起按几个人算；第一条之前按 1 人。', 'res.from': '从',
   'res.addRow': '加一条', 'res.participation': '水电网怎么分', 'res.partHint': '不参与：不计该住户的人·天，费用由其他参与者分摊。房东承担：照常计算该住户的人·天，但其费用份额由标记为「房东本人」的住户承担，适用于房租已含水电网。',
-  'res.rent': '月租', 'res.rentHint': '从哪天起每月多少；入住、搬出那一期按天折算。', 'res.needName': '请填名字', 'res.needMoveIn': '请填入住日期', 'res.badMoveOut': '搬出日期要晚于入住日期',
+  'res.addRent': '添加月租金额', 'res.rent': '月租', 'res.rentHint': '填写月租金额和生效日期；以后调租时再添加一条，保留原金额。', 'res.needName': '请填名字', 'res.needMoveIn': '请填入住日期', 'res.badMoveOut': '搬出日期要晚于入住日期',
   'res.cantDelete': '这位住户已经有账单分摊或收款记录，不能删除；搬走了请填搬出日期。', 'res.deleteConfirm': '删除住户「{name}」？', 'res.added': '已添加住户', 'res.saved': '已保存',
   'res.impactH': '这次修改会改变金额', 'res.impactP': '按新的设置，各人的应收合计会这样变（锁定的历史账单不受影响）：', 'res.impactNote': '以前发出的明细不会自动更新；收款页会提示「发出后有变动」。', 'res.impactGo': '确认修改',
   // 设置
@@ -279,7 +279,7 @@ const en = {
   'res.name': 'Name', 'res.shortName': 'Name on statements', 'res.shortNamePh': 'optional', 'res.moveIn': 'Move-in date', 'res.moveOut': 'Move-out date', 'res.moveOutHint': 'Leave empty if still living here.',
   'res.isOwner': 'This is me (master tenant: pays providers, collects from roommates)', 'res.weights': 'Weight', 'res.weightsHint': 'From which day to count how many people; 1 before the first entry.', 'res.from': 'from',
   'res.addRow': 'Add', 'res.participation': 'Utility sharing', 'res.partHint': 'Excluded: this tenant contributes no person-days; other participants share the cost. Paid by landlord: their person-days count, but their share is charged to the resident marked as landlord. Use this when rent includes utilities.',
-  'res.rent': 'Monthly rent', 'res.rentHint': 'From which day, how much per month; move-in/out periods are prorated.', 'res.needName': 'Please enter a name', 'res.needMoveIn': 'Please enter a move-in date', 'res.badMoveOut': 'Move-out must be after move-in',
+  'res.addRent': 'Add monthly rent', 'res.rent': 'Monthly rent', 'res.rentHint': 'Enter the monthly amount and its effective date. Add another entry when rent changes, keeping the earlier amount.', 'res.needName': 'Please enter a name', 'res.needMoveIn': 'Please enter a move-in date', 'res.badMoveOut': 'Move-out must be after move-in',
   'res.cantDelete': 'This resident has bill shares or payments and can’t be deleted; set a move-out date instead.', 'res.deleteConfirm': 'Delete resident “{name}”?', 'res.added': 'Resident added', 'res.saved': 'Saved',
   'res.impactH': 'This change affects amounts', 'res.impactP': 'With the new settings, total charges change like this (locked history is unaffected):', 'res.impactNote': 'Statements already sent won’t update; Collect will flag “changed since sent”.', 'res.impactGo': 'Apply',
   'set.rules': 'Collection rules', 'set.property': 'Property name', 'set.cycleDay': 'Period starts on day', 'set.cycleDayHint': 'Also the rent due day.', 'set.grace': 'Grace days', 'set.graceHint': 'Days after the due date before it counts as overdue.',
