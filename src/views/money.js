@@ -15,28 +15,32 @@ const rentPeople = ctx => ctx.D.residents.filter(r => !r.isOwner).sort((a, b) =>
 
 /** 收款先明确覆盖租期，再记录实际到账；可分次，也可提前付。 */
 export function openPayment(ctx, { residentId, amount, rentId, payment } = {}) {
-  const L = payment ? buildRentLedger({ ...ctx.S, data: { ...ctx.S.data, payments: { ...ctx.S.data.payments, [payment.id]: { ...payment, deleted: true } } } }, ctx.D.today) : ctx.D.ledger;
+  let L;
   const people = rentPeople(ctx);
   let rid = payment?.residentId || residentId || people[0]?.id, selected = payment?.rentId || rentId || '';
   let rows = [], chosen;
-  const f = { amount: payment?.amount ?? amount ?? null, date: payment?.date || ctx.D.today, method: payment ? (payment.method || 'other') : lastMethod(ctx, rid), note: payment?.note || '' };
+  const initialAmount = payment?.amount ?? amount ?? null;
+  const f = { amount: initialAmount == null ? null : Math.abs(initialAmount), refund: initialAmount < 0, date: payment?.date || ctx.D.today, method: payment ? (payment.method || 'other') : lastMethod(ctx, rid), note: payment?.note || '' };
   const prevEl = h('p.note'), datesEl = h('p'), quick = h('div.chips');
   const amtIn = h('input.big-amt', { inputmode: 'decimal', value: f.amount ?? '', oninput: e => { f.amount = parseAmount(e.target.value); preview(); } });
   const preview = () => {
     chosen = rows.find(x => x.id === selected);
-    datesEl.textContent = chosen ? t('rent.selectedPeriod', { due: chosen.dueDate, start: chosen.periodStart, end: chosen.periodEnd }) : t('rent.unassignedHint');
-    const debit = L.people[rid]?.debits.find(x => x.rentId === selected);
-    const left = chosen ? (debit ? debit.remaining / 100 : chosen.amount) : null;
-    quick.replaceChildren(...(left > 0 ? [ h('button.chip', { type: 'button', onclick: () => { f.amount = left; amtIn.value = left.toFixed(2); preview(); } }, t('rent.periodRemaining') + ' ' + money(left))] : []));
+    datesEl.textContent = chosen ? t('rent.selectedPeriod', { due: chosen.dueDate || '—', start: chosen.periodStart || '—', end: chosen.periodEnd || '—' }) : t('rent.unassignedHint');
+    const item = L.people[rid]?.items.find(x => x.rentId === selected);
+    const received = (L.people[rid]?.payments || []).filter(x => x.rentId === selected).reduce((sum, x) => sum + x.amount, 0);
+    const expected = item ? (item.unknown ? null : item.cents / 100) : chosen?.amount;
+    const left = chosen && expected != null ? Math.round((expected - received) * 100) / 100 : null;
+    quick.replaceChildren(...(left > 0 && !f.refund ? [ h('button.chip', { type: 'button', onclick: () => { f.amount = left; amtIn.value = left.toFixed(2); preview(); } }, t('rent.periodRemaining') + ' ' + money(left))] : []));
     prevEl.hidden = !chosen;
-    prevEl.textContent = left == null ? t('rent.receiptOnlyHint') : t('rent.periodBalance', { amount: left - (f.amount || 0) });
+    prevEl.textContent = left == null ? t('rent.receiptOnlyHint') : t('rent.periodBalance', { amount: left - (f.refund ? -1 : 1) * (f.amount || 0) });
   };
   const periodSelect = h('select', { onchange: e => { selected = e.target.value; preview(); } });
   const refreshPeriods = (auto = false) => {
+    L = buildRentLedger(payment ? { ...ctx.S, data: { ...ctx.S.data, payments: { ...ctx.S.data.payments, [payment.id]: { ...payment, deleted: true } } } } : ctx.S, ctx.D.today);
     rows = rentPeriodsFor(ctx.S, rid, ctx.D.today);
     if (auto && !selected) selected = rows.find(x => L.people[rid]?.debits.some(d => d.rentId === x.id && d.remaining > 0))?.id || rows.find(x => x.periodEnd >= ctx.D.today)?.id || '';
     periodSelect.replaceChildren(h('option', { value: '', selected: !selected }, t('rent.datesPending')),
-      ...rows.map(x => h('option', { value: x.id, selected: x.id === selected }, rentRange(x) + ' · ' + t('rent.dueShort') + ' ' + x.dueDate)));
+      ...rows.map(x => h('option', { value: x.id, selected: x.id === selected }, rentRange(x) + (x.dueDate ? ' · ' + t('rent.dueShort') + ' ' + x.dueDate : ''))));
     if (selected && !rows.some(x => x.id === selected)) { selected = ''; periodSelect.value = ''; }
     preview();
   };
@@ -45,14 +49,14 @@ export function openPayment(ctx, { residentId, amount, rentId, payment } = {}) {
   const renderMethods = () => methods.replaceChildren(...METHODS.map(m => h('button.chip' + (f.method === m ? '.on' : ''), { type: 'button', role: 'radio', 'aria-checked': String(f.method === m), onclick: () => { f.method = m; renderMethods(); } }, t('method.' + m))));
   renderMethods(); refreshPeriods(!payment);
   const save = () => {
-    if (!Number.isFinite(f.amount) || !f.amount || Math.abs(f.amount) > 1e7 || !rid) { amtIn.focus(); return; }
+    if (!Number.isFinite(f.amount) || f.amount <= 0 || f.amount > 1e7 || !rid) { amtIn.focus(); return; }
     if (!isISODate(f.date)) { prevEl.textContent = t('rent.historyError.date'); return; }
     const current = payment && ctx.S.data.payments[payment.id];
     if (current && current.updatedAt !== payment.updatedAt && !confirm(t(current.deleted ? 'form.deletedElsewhere' : 'form.changedElsewhere'))) return;
     let rec;
     ctx.batch(() => {
       if (chosen && !ctx.S.data.rents[chosen.id]) ctx.put('rents', chosen);
-      rec = ctx.put('payments', { ...payment, deleted: undefined, deletedAt: undefined, id: payment?.id || 'pay_' + newId(), purpose: 'rent', residentId: rid, rentId: chosen?.id || null, date: f.date, amount: f.amount, method: f.method, note: f.note });
+      rec = ctx.put('payments', { ...payment, deleted: undefined, deletedAt: undefined, id: payment?.id || 'pay_' + newId(), purpose: 'rent', residentId: rid, rentId: chosen?.id || null, date: f.date, amount: f.amount * (f.refund ? -1 : 1), method: f.method, note: f.note });
     });
     sheet.close();
     ctx.toast(t('pay.saved', { amount: rec.amount, name: residentName(ctx, rid) }), { action: t('undo'), onAction: () => payment ? ctx.put('payments', payment) : ctx.remove('payments', rec.id), ms: 10000 });
@@ -61,8 +65,10 @@ export function openPayment(ctx, { residentId, amount, rentId, payment } = {}) {
     body: h('form.form', { onsubmit: e => { e.preventDefault(); save(); } },
       h('label.field', null, h('span.field-label', null, t('pay.who')), sel),
       h('label.field', null, h('span.field-label', null, t('rent.coverage')), periodSelect), datesEl,
-      h('button.link-btn', { type: 'button', onclick: () => openRentPeriod(ctx, rid, null, { onSave: rec => { selected = rec.id; refreshPeriods(); } }) }, '＋ ' + t('rent.customPeriod')),
-      h('label.field', null, h('span.field-label', null, t('pay.amount')), h('div.amt-line', null, amtIn, signButton(amtIn)), h('span.hint', null, t('pay.refundHint'))), quick,
+      h('button.link-btn', { type: 'button', onclick: () => openRentPeriod(ctx, rid, null, { onSave: rec => { selected = rec.id; refreshPeriods(); } }) }, '＋ ' + t('rent.addRecord')),
+      h('label.field', null, h('span.field-label', null, t('rent.receiptType')), h('select', { onchange: e => { f.refund = e.target.value === 'refund'; preview(); } },
+        ['receipt', 'refund'].map(k => h('option', { value: k, selected: f.refund === (k === 'refund') }, t('rent.' + k))))),
+      h('label.field', null, h('span.field-label', null, t('pay.amount')), amtIn, h('span.hint', null, t('rent.refundHint'))), quick,
       h('div.field-row', null,
         h('label.field', null, h('span.field-label', null, t('rent.receivedDate')), h('input', { type: 'date', value: f.date, oninput: e => { f.date = e.target.value; } })),
         h('div.field', null, h('span.field-label', null, t('pay.method')), methods)),
@@ -85,13 +91,13 @@ export function openAdjustment(ctx, { residentId, kind = 'other', adjustment } =
     let rec;
     ctx.batch(() => {
       if (!ctx.S.data.rents[chosen.id]) ctx.put('rents', chosen);
-      rec = ctx.put('adjustments', { ...adjustment, id: adjustment?.id || 'adj_' + newId(), purpose: 'rent', residentId: f.residentId, rentId: chosen.id, date: adjustment?.date || ctx.D.today, amount: f.amount, kind: f.kind, label: f.label.trim(), collectPeriod: chosen.periodStart.slice(0, 7) });
+      rec = ctx.put('adjustments', { ...adjustment, id: adjustment?.id || 'adj_' + newId(), purpose: 'rent', residentId: f.residentId, rentId: chosen.id, date: adjustment?.date || ctx.D.today, amount: f.amount, kind: f.kind, label: f.label.trim(), collectPeriod: (chosen.periodStart || chosen.legacyDate || chosen.paidDate || chosen.dueDate || ctx.D.today).slice(0, 7) });
     });
     sheet.close();
     ctx.toast(t('adj.saved'), { action: t('undo'), onAction: () => adjustment ? ctx.put('adjustments', adjustment) : ctx.remove('adjustments', rec.id), ms: 10000 });
   };
-  const periodSelect = h('select', { onchange: e => { f.rentId = e.target.value; } });
-  const updatePeriods = () => periodSelect.replaceChildren(h('option', { value: '', selected: !f.rentId }, t('rent.datesPending')),
+  const periodSelect = h('select', { onchange: e => { f.rentId = e.target.value; err.hidden = true; } });
+  const updatePeriods = () => periodSelect.replaceChildren(h('option', { value: '', selected: !f.rentId }, t('rent.selectRecord')),
     ...rentPeriodsFor(ctx.S, f.residentId, ctx.D.today).map(x => h('option', { value: x.id, selected: x.id === f.rentId }, rentRange(x))));
   updatePeriods();
   const sheet = openSheet({
@@ -102,7 +108,12 @@ export function openAdjustment(ctx, { residentId, kind = 'other', adjustment } =
         ['opening', 'discount', 'charge', 'writeoff', 'other'].map(k => h('option', { value: k, selected: k === f.kind }, t('adj.kind.' + k))))),
       h('label.field', null, h('span.field-label', null, t('pay.amount')), (() => { const inp = h('input.big-amt', { inputmode: 'decimal', value: f.amount ?? '', placeholder: '0.00', oninput: e => { f.amount = parseAmount(e.target.value); } }); return h('div.amt-line', null, inp, signButton(inp)); })(), h('span.hint', null, t('adj.amountHint'))),
       h('label.field', null, h('span.field-label', null, t('adj.label')), h('input', { value: f.label, oninput: e => { f.label = e.target.value; } })),
-      h('label.field', null, h('span.field-label', null, t('rent.coverage')), periodSelect), h('p.note', null, t('rent.adjustmentPeriodHint')),
+      h('label.field', null, h('span.field-label', null, t('rent.adjustmentPeriod')), periodSelect),
+      h('button.link-btn', { type: 'button', onclick: () => {
+        const selected = rentPeriodsFor(ctx.S, f.residentId, ctx.D.today).find(x => x.id === f.rentId);
+        openRentPeriod(ctx, f.residentId, selected, { onSave: rec => { f.rentId = rec.id; updatePeriods(); err.hidden = true; } });
+      } }, t('rent.editOrAddPeriod')),
+      h('p.note', null, t('rent.adjustmentPeriodHint')),
       err),
     foot: [h('span.sp'), h('button.btn', { type: 'button', onclick: () => sheet.close() }, t('cancel')), h('button.btn.primary', { type: 'button', onclick: save }, t('save'))],
   });

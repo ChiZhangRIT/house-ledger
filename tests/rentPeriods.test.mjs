@@ -87,15 +87,15 @@ test('短期应收按实际覆盖天数计算，已确认金额不被月租修�
   assert.equal(rentPeriodsFor(s, 'b', '2026-11-03')[0].amount, 700);
 });
 
-test('新约定从已确认租期后生效，前后不重叠；自定义租期不能重复自动应收', () => {
+test('新约定从已确认租期后生效；手动记录覆盖自动候选，不重复保存的记录', () => {
   const s = fixture(), r = s.data.residents.b, previous = structuredClone(r);
   const first = scheduledPeriods(s, r, '2026-10-20')[0]; s.data.rents[first.id] = { ...first, amount: 1000 };
   r.rentSchedules.push({ from: '2026-11-16', cycleDay: 1, dueDay: 16, dueMonthOffset: 0 });
   assert.equal(validateSchedules(s, r, previous), null);
   const next = scheduledPeriods(s, r, '2026-11-20')[0];
   assert.deepEqual([next.periodStart, next.periodEnd, next.dueDate], ['2026-11-16', '2026-11-30', '2026-11-16']);
-  assert.equal(validateRentPeriod(s, { ...next, id: 'duplicate' }), 'overlap');
-  assert.equal(validateRentPeriod(s, { ...first, periodStart: '2026-09-16' }), 'beforeLedger');
+  assert.equal(validateRentPeriod(s, { ...next, id: 'manual' }), null);
+  assert.equal(validateRentPeriod(s, { ...first, periodStart: '2026-09-16' }), null);
 });
 
 test('调整与退款留在指定租期，旧调整不再用全屋起算日猜归属', () => {
@@ -162,9 +162,9 @@ test('每位住户分别按完整日期开始跟踪，跨月租期不受全屋�
   assert.equal(buildRentLedger(s, '2026-10-18').people.b.balance, 2000);
   const rec = { id: 'custom', residentId: 'b', history: true, datesConfirmed: true, periodStart: '2026-09-01', periodEnd: '2026-09-15', dueDate: '2026-09-01' };
   assert.equal(validateRentPeriod(s, rec), null);
-  assert.equal(validateRentPeriod(s, { ...rec, periodEnd: '2026-09-16' }), 'overlap');
-  assert.equal(validateRentPeriod(s, { ...rec, periodStart: '2026-09-16', periodEnd: '2026-10-15' }), 'activePeriod');
-  assert.equal(validateRentPeriod(s, { ...rec, history: false }), 'beforeLedger');
+  assert.equal(validateRentPeriod(s, { ...rec, periodEnd: '2026-09-16' }), null);
+  assert.equal(validateRentPeriod(s, { ...rec, periodStart: '2026-09-16', periodEnd: '2026-10-15' }), null);
+  assert.equal(validateRentPeriod(s, { ...rec, history: false }), null);
 });
 
 test('跟踪日不截短原租期；留空不回退到全屋开账月份，也不影响其他住户', () => {
@@ -188,13 +188,13 @@ test('修改跟踪日保留已确认应收、收款和历史记录，不把历�
   s.data.rents.old = old;
   r.rentTrackingStart = '2026-09-16';
   assert.equal(scheduledPeriods(s, r, '2026-10-18').some(x => x.periodStart === old.periodStart), false);
-  assert.equal(buildRentLedger(s, '2026-10-18').people.b.balance, 600);
+  assert.equal(buildRentLedger(s, '2026-10-18').people.b.outstanding, 600);
   assert.equal(validateRentPeriod(s, old), null);
   r.rentTrackingStart = '2026-11-16';
-  assert.equal(buildRentLedger(s, '2026-10-18').people.b.balance, 600);
+  assert.equal(buildRentLedger(s, '2026-10-18').people.b.outstanding, 600);
   assert.equal(validateRentPeriod(s, { ...saved, amount: 900 }), null);
   r.rentTrackingStart = null;
-  assert.equal(buildRentLedger(s, '2026-10-18').people.b.balance, 600);
+  assert.equal(buildRentLedger(s, '2026-10-18').people.b.outstanding, 600);
   assert.equal(s.data.rents.old, old);
   assert.equal(s.data.payments.p.rentId, saved.id);
 });

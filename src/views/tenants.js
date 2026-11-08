@@ -2,7 +2,7 @@
 import { h } from '../ui/dom.js';
 import { t, money, date } from '../i18n.js';
 import { rentOn } from '../core/ledger.js';
-import { rentReceipts, rentHistorySummary } from '../core/rent.js';
+import { rentReceipts, rentRecordSummary } from '../core/rent.js';
 import { columnChart } from '../ui/charts.js';
 import { avatar, statusChip } from './parts.js';
 import { openResident } from './residents.js';
@@ -13,7 +13,7 @@ export function rentStatus(p) {
   if (p?.trackingNotStarted) return statusChip('none', t('rent.trackingNotStarted'));
   if (p?.scheduleMissing) return statusChip('unknown', t('rent.scheduleMissing'));
   if (!p || !p.items.length) return statusChip('none', t('rent.notStarted'));
-  if (p.unknownRent.length) return statusChip('unknown', t('rent.unknown'));
+  if (p.unknownRent.length || p.incompletePeriods?.length) return statusChip('unknown', t('rent.unknown'));
   if (p.overdue > 0.005) return statusChip('critical', t('st.overdue', { amount: p.overdue, days: p.overdueDays }));
   if (p.outstanding > 0.005) return statusChip('warning', t('st.due', { amount: p.outstanding }));
   if (p.credit > 0.005) return statusChip('credit', t('st.credit', { amount: p.credit }));
@@ -45,7 +45,7 @@ export function render(root, ctx) {
     root.append(label === t('res.movedOut') ? h('details.card', null, h('summary', null, label + ' · ' + list.length), people)
       : h('section.card', null, h('h2.section-h', null, label), people));
   }
-  const history = rentHistorySummary(ctx.S);
+  const history = rentRecordSummary(ctx.S);
   if (history.missing.length) root.append(h('section.card', null, h('h2.section-h', null, t('rent.historyMissing')),
     h('p.note', null, t('rent.historyMissingHint')),
     h('div.people', null, tenants.filter(r => history.missing.some(x => x.residentId === r.id)).map(r => {

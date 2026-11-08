@@ -52,7 +52,7 @@ const VALIDATE = {
     source: isObj(r.source) ? r.source : {},
   } : null),
   payments: r => (typeof r.residentId === 'string' && ISO(r.date) && amount(r.amount) ? r : null),
-  rents: r => (typeof r.residentId === 'string' && (r.history === false ? isISODate(r.periodStart) && isISODate(r.periodEnd) && r.periodEnd >= r.periodStart && isISODate(r.dueDate) : (typeof r.periodStart === 'string' && /^\d{4}-\d{2}/.test(r.periodStart)) || ISO(r.legacyDate) || ISO(r.dueDate) || ISO(r.paidDate)) ? { ...r, amount: amount(r.amount) ? r.amount : null, receivedAmount: amount(r.receivedAmount) && r.receivedAmount >= 0 ? r.receivedAmount : null } : null),
+  rents: r => (typeof r.residentId === 'string' && ((typeof r.periodStart === 'string' && /^\d{4}-\d{2}/.test(r.periodStart)) || ISO(r.legacyDate) || ISO(r.dueDate) || ISO(r.paidDate)) ? { ...r, amount: amount(r.amount) ? r.amount : null, receivedAmount: amount(r.receivedAmount) && r.receivedAmount >= 0 ? r.receivedAmount : null } : null),
   adjustments: r => (typeof r.residentId === 'string' && MONTH(r.collectPeriod) && amount(r.amount) ? r : null),
 };
 

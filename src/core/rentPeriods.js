@@ -38,7 +38,7 @@ export function validateSchedules(state, resident, previous) {
   const schedules = resident.rentSchedules || [];
   if (schedules.some(s => !validSchedule(s))) return 'invalid';
   if (new Set(schedules.map(s => s.from)).size !== schedules.length) return 'duplicate';
-  const frozen = Object.values(state.data.rents).filter(r => !r.deleted && !isHistory(r) && r.residentId === resident.id && completeRentDates(r));
+  const frozen = Object.values(state.data.rents).filter(r => !r.deleted && r.residentId === resident.id && completeRentDates(r));
   const last = frozen.map(r => r.periodEnd).sort().at(-1);
   const past = list => JSON.stringify((list || []).filter(s => s.from <= last).sort((a, b) => a.from.localeCompare(b.from)));
   if (last && past(schedules) !== past(previous?.rentSchedules)) return 'frozen';
@@ -50,7 +50,8 @@ export function scheduledPeriods(state, resident, today, future = 2) {
   const terms = (resident.rentSchedules || []).filter(validSchedule).sort((a, b) => a.from.localeCompare(b.from));
   const stop = monthAfter(today, future), cutoff = rentTrackingStart(state, resident);
   if (!cutoff) return [];
-  const saved = Object.values(state.data.rents).filter(r => !r.deleted && r.residentId === resident.id);
+  // 删除快照也抑制自动候选，避免删除后以另一个自动 id 再次出现。
+  const saved = Object.values(state.data.rents).filter(r => r.residentId === resident.id);
   const out = [];
   terms.forEach((term, i) => {
     let key = term.from.slice(0, 7);
@@ -76,14 +77,8 @@ export function validateRentPeriod(state, rec) {
   const d = rentDates(rec);
   if ([d.periodStart, d.periodEnd, d.dueDate].some(x => x != null && !isISODate(x))) return 'date';
   if (d.periodStart && d.periodEnd && d.periodEnd < d.periodStart) return 'range';
-  if (!isHistory(rec) && !completeRentDates(rec)) return 'required';
-  if (isHistory(rec) && !d.periodStart && !d.dueDate && !d.legacyDate && !isISODate(rec.paidDate)) return 'required';
-  const cutoff = rentTrackingStart(state, person), previous = state.data.rents[rec.id];
-  const saved = previous && !previous.deleted && previous.residentId === rec.residentId && isHistory(previous) === isHistory(rec)
-    && (isHistory(rec) || rentDates(previous).periodStart === d.periodStart);
-  if (!saved && !isHistory(rec) && d.periodStart && cutoff && d.periodStart < cutoff) return 'beforeLedger';
-  if (!saved && isHistory(rec) && d.periodStart && cutoff && d.periodStart >= cutoff) return 'activePeriod';
-  if (scheduledPeriods(state, person, d.periodEnd || d.periodStart || person.moveIn, 1).some(r => r.id !== rec.id && rentOverlap(rec, r))) return 'overlap';
+  if (!d.periodStart && !d.dueDate && !d.legacyDate && !isISODate(rec.paidDate)) return 'required';
+  // 手动记录不受自动计算起点限制；只与已保存的记录查重，自动候选会让位。
   if (Object.values(state.data.rents).some(r => !r.deleted && r.id !== rec.id && r.residentId === rec.residentId && rentOverlap(rec, r))) return 'overlap';
   return null;
 }

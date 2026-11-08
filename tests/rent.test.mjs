@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { blankState } from '../src/core/store.js';
-import { buildRentLedger, rentReceipts, rentHistorySummary, validateHistoryRent } from '../src/core/rent.js';
+import { buildRentLedger, rentReceipts, rentRecordSummary, validateRentRecord } from '../src/core/rent.js';
 
 test('房租应收、收款和统计不包含 Utility 或未分类旧收款', () => {
   const s = blankState(); s.settings = { ledgerStart: '2026-10', rentCycleDay: 1 };
@@ -20,7 +20,7 @@ test('原表勾选和未知金额不伪造成房租收入', () => {
   assert.deepEqual(rentReceipts(s).months, []);
 });
 
-test('历史补记按确认的到账日期统计，未知日期不猜测，不重复生成收款或应收', () => {
+test('所有房租按确认的到账日期统计，未知日期不猜测，未知应收不生成欠款', () => {
   const s = blankState(); s.settings = { ledgerStart: '2026-10', rentCycleDay: 1 };
   s.data.residents.r = { id: 'r', name: 'A', moveIn: '2026-01-01', rent: [{ from: '2026-01-01', amount: 1000 }], rentSchedules: [{ from: '2026-01-01', cycleDay: 1, dueDay: 1, dueMonthOffset: 0 }] };
   s.data.rents = {
@@ -29,31 +29,31 @@ test('历史补记按确认的到账日期统计，未知日期不猜测，不�
     c: { id: 'c', residentId: 'r', periodStart: '2026-09-01', paid: true, history: true, receivedAmount: 0, paidDate: '2026-09-05' },
     gone: { id: 'gone', residentId: 'r', periodStart: '2026-09-01', paid: true, receivedAmount: 99, deleted: true },
   };
-  const summary = rentHistorySummary(s);
+  const summary = rentRecordSummary(s);
   assert.equal(summary.records.length, 3);
   assert.equal(summary.missing.length, 3); assert.equal(summary.total, 900);
   assert.deepEqual(rentReceipts(s).months, ['2026-09']);
   assert.deepEqual(rentReceipts(s).values, [900]);
-  assert.equal(buildRentLedger(s, '2026-10-10').people.r.balance, 1000);
+  assert.equal(buildRentLedger(s, '2026-10-10').people.r.outstanding, 1000);
   s.data.rents.b.periodStart = '2026-10-01';
-  assert.equal(buildRentLedger(s, '2026-10-10').people.r.balance, 1000);
+  assert.equal(buildRentLedger(s, '2026-10-10').people.r.outstanding, 1000);
   s.data.residents.r.deleted = true;
-  assert.deepEqual(rentHistorySummary(s).records, []);
+  assert.deepEqual(rentRecordSummary(s).records, []);
 });
 
-test('历史房租可脱离导入文件新增，校验重叠租期、金额、日期和开账边界', () => {
+test('房租可独立新增，校验重叠租期、金额和日期，不受自动计算边界限制', () => {
   const s = blankState(); s.settings.ledgerStart = '2026-10';
   s.data.residents.r = { id: 'r', name: 'A', moveIn: '2025-01-01' };
   const rec = { id: 'x', residentId: 'r', periodStart: '2026-09-16', periodEnd: '2026-10-15', dueDate: '2026-09-10', datesConfirmed: true, history: true, paid: true, receivedAmount: null, paidDate: null };
-  assert.equal(validateHistoryRent(s, rec), null);
-  assert.equal(validateHistoryRent(s, { ...rec, receivedAmount: 0, paidDate: '2026-09-05' }), null);
-  assert.equal(validateHistoryRent(s, { ...rec, receivedAmount: -1 }), 'amount');
-  assert.equal(validateHistoryRent(s, { ...rec, receivedAmount: Infinity }), 'amount');
-  assert.equal(validateHistoryRent(s, { ...rec, paidDate: '2026-02-30' }), 'date');
-  assert.equal(validateHistoryRent(s, { ...rec, periodStart: '2026-13-16' }), 'date');
-  assert.equal(validateHistoryRent(s, { ...rec, periodStart: '2026-10-01' }), 'activePeriod');
+  assert.equal(validateRentRecord(s, rec), null);
+  assert.equal(validateRentRecord(s, { ...rec, receivedAmount: 0, paidDate: '2026-09-05' }), null);
+  assert.equal(validateRentRecord(s, { ...rec, receivedAmount: -1 }), 'amount');
+  assert.equal(validateRentRecord(s, { ...rec, receivedAmount: Infinity }), 'amount');
+  assert.equal(validateRentRecord(s, { ...rec, paidDate: '2026-02-30' }), 'date');
+  assert.equal(validateRentRecord(s, { ...rec, periodStart: '2026-13-16' }), 'date');
+  assert.equal(validateRentRecord(s, { ...rec, periodStart: '2026-10-01' }), null);
   s.data.rents.other = { ...rec, id: 'other', periodStart: '2026-09-01' };
-  assert.equal(validateHistoryRent(s, rec), 'overlap');
-  assert.equal(validateHistoryRent(s, s.data.rents.other), null);
-  assert.equal(validateHistoryRent(s, { ...rec, residentId: 'absent' }), 'tenant');
+  assert.equal(validateRentRecord(s, rec), 'overlap');
+  assert.equal(validateRentRecord(s, s.data.rents.other), null);
+  assert.equal(validateRentRecord(s, { ...rec, residentId: 'absent' }), 'tenant');
 });

@@ -150,7 +150,7 @@ export function openResident(ctx, r) {
       h('div.field-row', null, h('label.field', null, h('span.field-label', null, t('rent.dueMonth')), h('select', { onchange: e => { x.dueMonthOffset = Number(e.target.value); dirty = true; preview(); } }, [-1, 0, 1].map(n => h('option', { value: n, selected: x.dueMonthOffset === n }, t('rent.dueMonth.' + n))))), input('cycleDay', 'rent.cycleDay', 'number')),
       example, h('button.link-btn', { type: 'button', onclick: () => { w.rentSchedules.splice(i, 1); dirty = true; drawSchedules(); } }, t('form.remove')));
   }), h('button.btn', { type: 'button', onclick: () => {
-    const savedEnd = Object.values(ctx.S.data.rents).filter(x => !x.deleted && x.history === false && x.residentId === w.id).map(x => x.periodEnd).sort().at(-1);
+    const savedEnd = Object.values(ctx.S.data.rents).filter(x => !x.deleted && x.residentId === w.id && x.datesConfirmed && x.periodEnd).map(x => x.periodEnd).sort().at(-1);
     w.rentSchedules.push({ from: savedEnd ? addDays(savedEnd, 1) : (w.rentSchedules.length ? ctx.D.today : w.moveIn), cycleDay: 1, dueDay: 1, dueMonthOffset: 0 });
     dirty = true; drawSchedules();
   } }, '＋ ' + t('rent.addSchedule')));
