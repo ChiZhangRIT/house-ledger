@@ -1,5 +1,5 @@
 // 房租记录统一编辑；旧字段只为兼容已有记录，来源不影响功能。
-import { h, openSheet } from '../ui/dom.js';
+import { h, openSheet, signButton } from '../ui/dom.js';
 import { t, money } from '../i18n.js';
 import { newId } from '../core/store.js';
 import { validateRentRecord, calculateRentPeriod, rentRecordEntries } from '../core/rent.js';
@@ -18,6 +18,9 @@ export function openRentPeriod(ctx, residentId, record, { onSave } = {}) {
     amount: record && !isHistory(record) ? record.amount ?? null : null, note: record?.note || '' };
   let dirty = false;
   let autoAmount = record?.amountAuto ?? (f.amount == null || !ctx.S.data.rents[record?.id]), amountInput;
+  const adjustments = record ? Object.values(ctx.S.data.adjustments)
+    .filter(x => !x.deleted && x.purpose === 'rent' && x.residentId === residentId && x.rentId === record.id)
+    .map(x => ({ original: x, kind: x.kind || 'other', amount: x.amount, label: x.label || '', removed: false })) : [];
   const err = h('p.err', { hidden: true });
   const field = (key, label) => h('label.field', null, h('span.field-label', null, t(label)), h('input', { type: 'date', value: f[key], oninput: e => {
     f[key] = e.target.value; dirty = true;
@@ -32,7 +35,7 @@ export function openRentPeriod(ctx, residentId, record, { onSave } = {}) {
     return h('label.field', null, h('span.field-label', null, t(label)), input);
   };
   const expectedField = amountField('amount', 'rent.expectedAmount');
-  const calculation = h('div'), amountMode = h('p.note'), adjustmentSummary = h('p.note');
+  const calculation = h('div'), amountMode = h('p.note'), adjustmentSummary = h('div.row.rent-final-charge');
   const useCalculated = h('button.link-btn', { type: 'button', onclick: () => { autoAmount = true; dirty = true; refreshAmount(); } }, t('rent.useCalculated'));
   function refreshAmount() {
     const result = calculateRentPeriod(ctx.S.data.residents[residentId], f.periodStart, f.periodEnd, ctx.S.settings.prorate);
@@ -45,13 +48,36 @@ export function openRentPeriod(ctx, residentId, record, { onSave } = {}) {
           : [p.rates.map(r => t('rent.calculationRate', { rent: r.amount, n: r.days, days: p.periodDays })).join(' + ') + ' = ', h('strong', null, money(p.amount))])))));
     if (result.parts.length > 1) calculation.append(h('p.note', null, t('rent.calculationTotal', { amount: result.amount })));
     useCalculated.hidden = autoAmount || result.amount == null;
-    const adjustments = record ? Object.values(ctx.S.data.adjustments).filter(x => !x.deleted && x.purpose === 'rent' && x.residentId === residentId && x.rentId === record.id) : [];
-    const cents = adjustments.reduce((sum, x) => sum + Math.round(x.amount * 100), 0);
-    adjustmentSummary.hidden = !adjustments.length;
-    adjustmentSummary.textContent = Number.isFinite(f.amount)
-      ? t('rent.amountWithAdjustments', { diff: cents / 100, total: (Math.round(f.amount * 100) + cents) / 100 }) : t('rent.adjustmentAmountMissing');
+    const cents = adjustments.filter(x => !x.removed && Number.isFinite(x.amount)).reduce((sum, x) => sum + Math.round(x.amount * 100), 0);
+    adjustmentSummary.replaceChildren(h('span', null, t('rent.finalExpected')), h('span.sp'),
+      h('strong.num', null, Number.isFinite(f.amount) ? money((Math.round(f.amount * 100) + cents) / 100) : '—'));
   }
   refreshAmount();
+  const adjustmentRows = h('div.form');
+  const renderAdjustments = () => adjustmentRows.replaceChildren(...adjustments.filter(x => !x.removed).map(item => {
+    const amount = h('input', { inputmode: 'decimal', value: item.amount ?? '', placeholder: '0.00', oninput: e => {
+      item.amount = parseAmount(e.target.value); dirty = true; refreshAmount();
+    } });
+    item.amountInput = amount;
+    const label = h('input', { value: item.label, oninput: e => { item.label = e.target.value; dirty = true; } });
+    item.labelInput = label;
+    return h('fieldset.rent-charge-item', null, h('div.field-row', null,
+      h('label.field', null, h('span.field-label', null, t('adj.kind')), h('select', { onchange: e => {
+        item.kind = e.target.value;
+        if (Number.isFinite(item.amount) && ['charge', 'discount', 'writeoff'].includes(item.kind)) {
+          item.amount = Math.abs(item.amount) * (item.kind === 'charge' ? 1 : -1); amount.value = item.amount;
+        }
+        dirty = true; refreshAmount();
+      } }, ['charge', 'discount', 'opening', 'writeoff', 'other'].map(kind => h('option', { value: kind, selected: kind === item.kind }, t('adj.kind.' + kind))))),
+      h('label.field', null, h('span.field-label', null, t('pay.amount')), h('div.amt-line', null, amount, signButton(amount)))),
+      h('label.field', null, h('span.field-label', null, t('adj.label')), label),
+      h('button.link-btn.danger', { type: 'button', onclick: () => { item.removed = true; dirty = true; renderAdjustments(); refreshAmount(); } }, t('rent.removeChargeItem')));
+  }));
+  const chargeDetails = h('details.rent-charge-editor', { open: adjustments.length > 0 }, h('summary', null, t('rent.chargeOptional')),
+    h('div.form', null, adjustmentRows, h('button.btn', { type: 'button', onclick: () => {
+      adjustments.push({ kind: 'charge', amount: null, label: '', removed: false }); dirty = true; renderAdjustments();
+    } }, '＋ ' + t('rent.addChargeItem')), h('p.note', null, t('rent.chargeDraftHint'))));
+  renderAdjustments();
   const save = () => {
     const current = record && ctx.S.data.rents[record.id];
     if (current && current.updatedAt !== record.updatedAt && !confirm(t(current.deleted ? 'form.deletedElsewhere' : 'form.changedElsewhere'))) return;
@@ -61,7 +87,24 @@ export function openRentPeriod(ctx, residentId, record, { onSave } = {}) {
     delete rec.deleted; delete rec.deletedAt;
     const error = validateRentRecord(ctx.S, rec);
     if (error) { err.textContent = t('rent.historyError.' + error); err.hidden = false; return; }
-    ctx.put('rents', rec); dirty = false; sheet.close(); ctx.toast(t('res.saved')); onSave?.(rec);
+    for (const item of adjustments.filter(x => !x.removed)) {
+      if (!Number.isFinite(item.amount) || !item.amount || Math.abs(item.amount) > 1e7) {
+        err.textContent = t('pay.badAmount'); err.hidden = false; chargeDetails.open = true; item.amountInput.focus(); return;
+      }
+      if (!item.label.trim()) { err.textContent = t('adj.needLabel'); err.hidden = false; chargeDetails.open = true; item.labelInput.focus(); return; }
+    }
+    const changed = adjustments.filter(x => x.original ? x.removed || x.kind !== (x.original.kind || 'other') || x.amount !== x.original.amount || x.label !== (x.original.label || '') : !x.removed);
+    if (changed.some(x => x.original && ctx.S.data.adjustments[x.original.id]?.updatedAt !== x.original.updatedAt) && !confirm(t('form.changedElsewhere'))) return;
+    ctx.batch(() => {
+      ctx.put('rents', rec);
+      for (const item of changed) {
+        if (item.removed) ctx.remove('adjustments', item.original.id);
+        else ctx.put('adjustments', { ...item.original, id: item.original?.id || 'adj_' + newId(), purpose: 'rent', residentId, rentId: rec.id,
+          date: item.original?.date || ctx.D.today, amount: item.amount, kind: item.kind, label: item.label.trim(),
+          collectPeriod: (rec.periodStart || rec.legacyDate || rec.paidDate || rec.dueDate || ctx.D.today).slice(0, 7) });
+      }
+    });
+    dirty = false; sheet.close(); ctx.toast(t('res.saved')); onSave?.(rec);
   };
   const remove = () => deleteRentRecord(ctx, record, () => { dirty = false; sheet.close(); onSave?.(); });
   const sheet = openSheet({ title: t(record ? 'rent.editCharge' : 'rent.newPeriod'), closeLabel: t('rent.close'), wide: true,
@@ -72,10 +115,10 @@ export function openRentPeriod(ctx, residentId, record, { onSave } = {}) {
       h('div.field-row', null, field('periodStart', 'rent.start'), field('periodEnd', 'rent.end')),
       h('p.note', null, t('rent.recordDatesHint')), expectedField,
       h('div.rent-period-preview', null, amountMode, calculation, useCalculated),
-      h('p.note', null, t('rent.expectedHint')), adjustmentSummary,
+      h('p.note', null, t('rent.expectedHint')), chargeDetails, adjustmentSummary,
       h('label.field', null, h('span.field-label', null, t('form.note')), h('textarea', { rows: 2, value: f.note, oninput: e => { f.note = e.target.value; dirty = true; } })),
       err, h('button', { type: 'submit', hidden: true })),
-    foot: [record ? h('button.btn.danger', { type: 'button', onclick: remove }, t('bill.delete')) : null, h('span.sp'),
+    foot: [record ? h('button.btn.danger', { type: 'button', onclick: remove }, t('rent.deleteRecord')) : null, h('span.sp'),
       h('button.btn', { type: 'button', onclick: () => sheet.tryClose() }, t('cancel')), h('button.btn.primary', { type: 'button', onclick: save }, t('save'))].filter(Boolean),
     beforeClose: () => !dirty || confirm(t('form.discard')),
   });

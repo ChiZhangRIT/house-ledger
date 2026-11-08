@@ -3,7 +3,7 @@ import { h, openSheet } from '../ui/dom.js';
 import { t, money, date } from '../i18n.js';
 import { rentPeriodsFor, rentPeriodSummary } from '../core/rent.js';
 import { statusChip } from './parts.js';
-import { openPayment, openAdjustment } from './money.js';
+import { openPayment } from './money.js';
 import { openRentPeriod, rentRange, deleteRentRecord } from './rentHistory.js';
 import { recordNotes } from './notes.js';
 
@@ -25,7 +25,6 @@ export function openRentDetail(ctx, residentId, record) {
     const more = h('details.rent-more', null, h('summary', null, t('rent.more')),
       h('div.row', null,
         h('button.link-btn', { type: 'button', onclick: () => openPayment(ctx, { residentId, rentId: period.id, refund: true, onSave: draw }) }, t('rent.recordRefund')),
-        h('button.link-btn', { type: 'button', onclick: () => openAdjustment(ctx, { residentId, rentId: period.id, onSave: draw }) }, t('rent.adjustments')),
         h('button.link-btn', { type: 'button', onclick: () => openRentPeriod(ctx, residentId, period, { onSave: draw }) }, t('rent.editCharge')),
         h('button.link-btn.danger', { type: 'button', onclick: () => deleteRentRecord(ctx, period, draw) }, t('rent.deleteRecord'))));
     const receipts = h('div.rent-transactions');
@@ -37,9 +36,8 @@ export function openRentDetail(ctx, residentId, record) {
         h('button.link-btn', { type: 'button', onclick: () => openPayment(ctx, { residentId, payment, onSave: draw }) }, t('bill.edit'))));
     }
     if (!summary.receipts.length) receipts.append(h('p.muted', null, t('rent.noReceipts')));
-    const adjustments = summary.adjustments.length ? h('details', null, h('summary', null, t('rent.adjustments')),
-      summary.adjustments.map(a => h('div.rent-transaction', null, h('span', null, a.label), h('span.num', null, money(a.amount)),
-        h('button.link-btn', { type: 'button', onclick: () => openAdjustment(ctx, { residentId, adjustment: a, onSave: draw }) }, t('bill.edit'))))) : null;
+    const adjustments = summary.adjustments.length ? h('details', null, h('summary', null, t('rent.chargeItems')),
+      summary.adjustments.map(a => h('div.rent-transaction', null, h('span', null, a.label), h('span.num', null, money(a.amount))))) : null;
     const notes = recordNotes(ctx, 'rents', ctx.S.data.rents[period.id] || period, draw);
     body.replaceChildren(...[
       h('div.row', null, h('p.muted', null, ctx.S.data.residents[residentId].name), h('span.sp'), rentPeriodStatus(summary)),
