@@ -51,7 +51,7 @@ export function render(root, ctx, [id]) {
       Math.abs(sum - b.total) > 0.005 ? h('p.note.warn-text', null, '⚠ ' + t('check.itemsSum', { sum, diff: Math.round((b.total - sum) * 100) / 100 })) : null));
     root.append(fieldGuide([...new Set(items.map(i => i.key))]));
   }
-  const notes = billNotes(ctx.S, b); if (notes) root.append(notes);
+  const notes = billNotes(ctx, b); if (notes) root.append(notes);
 
   // 用量和单价
   const usage = Object.entries(st.usage);

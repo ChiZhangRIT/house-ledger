@@ -5,12 +5,13 @@ import { rentOverlap } from '../core/rentPeriods.js';
 import { rentRange } from './rentHistory.js';
 import { normalizeState, restoredRecord } from '../core/store.js';
 
-const COLLECTIONS = ['bills', 'residents', 'rents', 'payments', 'adjustments'];
+const COLLECTIONS = ['bills', 'residents', 'rents', 'payments', 'adjustments', 'comments'];
 const deletedRows = ctx => COLLECTIONS.flatMap(collection => Object.values(ctx.S.data[collection]).filter(r => r.deleted).map(record => ({ collection, record })))
   .sort((a, b) => (b.record.deletedAt || b.record.updatedAt) - (a.record.deletedAt || a.record.updatedAt));
 const label = (ctx, c, r) => {
   if (c === 'bills') return r.statementDate ? `${ctx.S.data.providers[r.providerId]?.name || ''} · ${date(r.statementDate, 'iso')} · ${money(r.total)}` : r.id;
   if (c === 'residents') return r.name || r.id;
+  if (c === 'comments') return (r.comments?.[0]?.text || '').slice(0, 100) || r.id;
   const name = ctx.S.data.residents[r.residentId]?.name || r.residentId || r.id;
   return name + (c === 'rents' ? ' · ' + rentRange(r) : r.date ? ' · ' + date(r.date, 'iso') : '');
 };

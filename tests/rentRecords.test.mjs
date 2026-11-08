@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { blankState, normalizeState, deletedRecord, restoredRecord, canon, mergeStates } from '../src/core/store.js';
-import { rentPeriodsFor, buildRentLedger, rentReceipts, rentRecordSummary } from '../src/core/rent.js';
+import { rentPeriodsFor, buildRentLedger, rentReceipts, rentRecordSummary, rentPayments, rentReceiptChanges, rentPeriodSummary } from '../src/core/rent.js';
 import { scheduledPeriods, validateRentPeriod } from '../src/core/rentPeriods.js';
 
 function fixture() {
@@ -108,4 +108,48 @@ test('删除租期保留单独收款与调整，恢复后重新对应原记录�
   assert.equal(p.unassignedAdjustments.length, 0);
   assert.equal(p.outstanding, 0);
   assert.deepEqual(rentReceipts(s).values, [1700, -200]);
+});
+
+test('编辑旧收款转成同 id 的独立明细，不重复收钱，旧备注及租期保持', () => {
+  const s=fixture();s.data.residents.r.rentTrackingStart=null;
+  s.data.rents.old={id:'old',residentId:'r',history:false,datesConfirmed:true,periodStart:'2022-10-01',periodEnd:'2022-10-15',dueDate:'2022-09-15',amount:1700,paid:true,receivedAmount:1700,paidDate:'2022-09-15',note:'租期备注'};
+  const receipt=rentPayments(s)[0], changes=rentReceiptChanges(s,receipt);
+  assert.equal(changes.receipt.id,'receipt:old');
+  assert.equal(changes.rent.note,'租期备注');
+  s.data.rents.old=changes.rent;s.data.payments[receipt.id]={...changes.receipt,amount:1600};
+  assert.deepEqual(rentReceipts(s).values,[1600]);
+  assert.equal(rentRecordSummary(s).total,1600);
+  // 较旧设备带回旧的内含收款字段时，同一笔也不会被重复计入。
+  s.data.rents.old.paid=true;s.data.rents.old.receivedAmount=1700;
+  assert.deepEqual(rentReceipts(s).values,[1600]);
+  s.data.payments[receipt.id]=deletedRecord(s.data.payments[receipt.id],20);
+  assert.deepEqual(rentReceipts(s).values,[]);
+  s.data.payments[receipt.id]=restoredRecord('payments',s.data.payments[receipt.id],null,30);
+  assert.deepEqual(rentReceipts(s).values,[1600]);
+});
+
+test('未知金额与到账日的收款可编辑、删除和恢复，不伪造成收入或已结清', () => {
+  const s=fixture();s.data.residents.r.rentTrackingStart=null;
+  s.data.rents.old={id:'old',residentId:'r',legacyDate:'2022-10-16',paid:true,receivedAmount:null};
+  const changes=rentReceiptChanges(s,rentPayments(s)[0]);
+  s.data.rents.old=changes.rent;s.data.payments[changes.receipt.id]=changes.receipt;
+  const reloaded=normalizeState(JSON.parse(JSON.stringify(s)));
+  assert.equal(reloaded.data.payments['receipt:old'].amount,null);
+  assert.deepEqual(rentReceipts(reloaded).values,[]);
+  assert.equal(buildRentLedger(reloaded,'2023-03-01').people.r.incompleteReceipts.length,1);
+  assert.equal(rentRecordSummary(reloaded).missing.length,1);
+  const removed=deletedRecord(reloaded.data.payments['receipt:old'],20);
+  assert.equal(restoredRecord('payments',removed,null,30).amount,null);
+});
+
+test('同一期多笔收款、退款和减免归入一行；待补金额不当作零', () => {
+  const s=fixture();s.data.residents.r.rentTrackingStart=null;
+  const period=s.data.rents.p={id:'p',residentId:'r',history:false,datesConfirmed:true,periodStart:'2022-10-16',periodEnd:'2022-11-15',dueDate:'2022-10-15',amount:1700};
+  for(const [id,amount] of [['one',1000],['two',700],['refund',-100]])s.data.payments[id]={id,residentId:'r',purpose:'rent',rentId:'p',amount,date:'2022-10-15'};
+  s.data.adjustments.a={id:'a',residentId:'r',purpose:'rent',rentId:'p',amount:-100,collectPeriod:'2022-10'};
+  const summary=rentPeriodSummary(s,period);
+  assert.deepEqual([summary.expected,summary.net,summary.remaining,summary.receipts.length],[1600,1600,0,3]);
+  s.data.payments.unknown={id:'unknown',residentId:'r',purpose:'rent',rentId:'p',amount:null,date:'',confirmationOnly:true};
+  assert.equal(rentPeriodSummary(s,period).remaining,null);
+  assert.equal(rentPeriodSummary(s,period).incomplete,true);
 });

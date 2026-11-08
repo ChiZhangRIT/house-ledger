@@ -462,3 +462,38 @@ body.dragging::after { content: attr(data-drop); position: fixed; inset: 0; z-in
 .bill-document, .pdf-batch { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
 .pdf-pages { min-height: 120px; }
 .pdf-pages canvas { display: block; width: 100%; height: auto; }
+
+/* 租期概览与逐笔明细 */
+.rent-record-list { margin-top: 14px; }
+.rent-record-grid { display: grid; grid-template-columns: minmax(200px, 2.2fr) minmax(95px, 1fr) minmax(95px, 1fr) minmax(150px, 1.4fr); gap: 12px; align-items: center; }
+.rent-record-head { color: var(--ink-2); font-size: 12.5px; padding: 4px 0 10px; }
+button.rent-record-row { width: 100%; padding: 14px 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; color: var(--ink); text-align: left; cursor: pointer; }
+button.rent-record-row:hover { background: var(--surface-2); }
+.rent-record-grid > .num, .rent-record-status { text-align: right; }
+.rent-record-period { font-weight: 600; }
+.rent-record-period > .small { margin-top: 4px; font-weight: 400; }
+.rent-mobile-label { display: none; }
+.rent-more > summary { color: var(--accent); }
+.rent-more[open] > :not(summary) { margin-top: 8px; }
+.rent-detail { display: grid; gap: 14px; }
+.rent-detail > p, .rent-detail h3 { margin: 0; }
+.rent-detail-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.rent-detail-value { font-size: 22px; font-weight: 650; margin-top: 4px; }
+.rent-transaction { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.rent-transaction:last-child { border-bottom: 0; }
+.rent-transaction > :first-child { overflow-wrap: anywhere; }
+.record-notes > .note-thread { padding: 8px 0; }
+.link-btn.danger { color: var(--critical); }
+@media (max-width: 650px) {
+  .rent-record-head { display: none; }
+  .rent-record-grid { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; }
+  .rent-record-period { grid-column: 1 / -1; }
+  .rent-record-grid > .num { text-align: left; }
+  .rent-record-status { grid-column: 2; grid-row: 2 / 4; }
+  .rent-mobile-label { display: inline; color: var(--ink-2); font-size: 12.5px; }
+  .rent-detail-value { font-size: 18px; }
+  .rent-detail-summary { gap: 6px; }
+  .rent-transaction { grid-template-columns: minmax(0, 1fr) auto; }
+  .rent-transaction > .num { grid-row: 1; grid-column: 2; }
+  .rent-transaction > button { grid-column: 2; }
+}

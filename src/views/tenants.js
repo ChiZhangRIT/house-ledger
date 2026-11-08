@@ -13,7 +13,7 @@ export function rentStatus(p) {
   if (p?.trackingNotStarted) return statusChip('none', t('rent.trackingNotStarted'));
   if (p?.scheduleMissing) return statusChip('unknown', t('rent.scheduleMissing'));
   if (!p || !p.items.length) return statusChip('none', t('rent.notStarted'));
-  if (p.unknownRent.length || p.incompletePeriods?.length) return statusChip('unknown', t('rent.unknown'));
+  if (p.unknownRent.length || p.incompletePeriods?.length || p.incompleteReceipts?.length) return statusChip('unknown', t('rent.unknown'));
   if (p.overdue > 0.005) return statusChip('critical', t('st.overdue', { amount: p.overdue, days: p.overdueDays }));
   if (p.outstanding > 0.005) return statusChip('warning', t('st.due', { amount: p.outstanding }));
   if (p.credit > 0.005) return statusChip('credit', t('st.credit', { amount: p.credit }));
@@ -30,8 +30,8 @@ export function render(root, ctx) {
   root.append(h('section.stats', null,
     stat(t('rent.living'), String(tenants.filter(r => r.moveIn <= D.today && (!r.moveOut || r.moveOut > D.today)).length)),
     stat(t('rent.receivedMonth'), money(receipts.payments.filter(p => p.date.startsWith(currentMonth)).reduce((s, p) => s + p.amount, 0))),
-    stat(t('rent.knownDue'), money(Object.values(D.ledger.people).reduce((s, p) => s + ((p.unassignedPayments.length || p.unassignedAdjustments.length) ? 0 : p.overdue), 0)))));
-  if (Object.values(D.ledger.people).some(p => p.unknownRent.length || p.scheduleMissing || p.unassignedPayments.length || p.unassignedAdjustments.length)) root.append(h('p.note', null, t('rent.unknownHint')));
+    stat(t('rent.knownDue'), money(Object.values(D.ledger.people).reduce((s, p) => s + ((p.unassignedPayments.length || p.unassignedAdjustments.length || p.incompleteReceipts?.length || p.incompletePeriods?.length) ? 0 : p.overdue), 0)))));
+  if (Object.values(D.ledger.people).some(p => p.unknownRent.length || p.scheduleMissing || p.unassignedPayments.length || p.unassignedAdjustments.length || p.incompleteReceipts?.length || p.incompletePeriods?.length)) root.append(h('p.note', null, t('rent.unknownHint')));
   for (const [label, list] of [[t('res.living'), D.residents.filter(r => !r.moveOut || r.moveOut > D.today)], [t('res.movedOut'), D.residents.filter(r => r.moveOut && r.moveOut <= D.today)]]) {
     if (!list.length) continue;
     const people = h('div.people', null, list.map(r => {

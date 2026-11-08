@@ -48,3 +48,22 @@ export function notesImport(dump, state, file = 'Shared Utilities.numbers') {
 export function notesFor(state, collection, id) {
   return live(state, 'comments').filter(n => n.target && n.target.collection === collection && n.target.id === id);
 }
+
+/** 路径使用原数组下标；删除保留节点，回复、作者和来源不会因编辑而错位。 */
+export function patchNoteThread(note, path, changes) {
+  const out = JSON.parse(JSON.stringify(note));
+  let list = out.comments, thread;
+  for (const index of path) {
+    if (!Number.isInteger(index) || !list?.[index]) return null;
+    thread = list[index]; list = thread.replies;
+  }
+  if (!thread) return null;
+  if (typeof changes.text === 'string') thread.text = changes.text;
+  if (changes.deleted === true) thread.deleted = true;
+  if (changes.deleted === false) delete thread.deleted;
+  return out;
+}
+
+export function hasVisibleNote(note) {
+  return (note.comments || []).some(c => !c.deleted);
+}

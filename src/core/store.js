@@ -51,9 +51,11 @@ const VALIDATE = {
       : { mode: 'auto' },
     source: isObj(r.source) ? r.source : {},
   } : null),
-  payments: r => (typeof r.residentId === 'string' && ISO(r.date) && amount(r.amount) ? r : null),
+  payments: r => (typeof r.residentId === 'string' && (ISO(r.date) || (r.purpose === 'rent' && !r.date))
+    && (amount(r.amount) || (r.purpose === 'rent' && r.confirmationOnly === true && r.amount == null)) ? { ...r, date: r.date || '' } : null),
   rents: r => (typeof r.residentId === 'string' && ((typeof r.periodStart === 'string' && /^\d{4}-\d{2}/.test(r.periodStart)) || ISO(r.legacyDate) || ISO(r.dueDate) || ISO(r.paidDate)) ? { ...r, amount: amount(r.amount) ? r.amount : null, receivedAmount: amount(r.receivedAmount) && r.receivedAmount >= 0 ? r.receivedAmount : null } : null),
   adjustments: r => (typeof r.residentId === 'string' && MONTH(r.collectPeriod) && amount(r.amount) ? r : null),
+  comments: r => Array.isArray(r.comments) ? r : null,
 };
 
 /** 读入本地、云端或导入的数据时的整理：丢掉格式不对的记录，补齐缺的集合 */

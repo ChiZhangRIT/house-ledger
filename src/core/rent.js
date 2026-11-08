@@ -29,7 +29,7 @@ export function calculateRentPeriod(resident, start, end, prorate = 'daily') {
 }
 
 export function rentState(state) {
-  return { ...state, data: { ...state.data, bills: {}, rents: {}, payments: Object.fromEntries(rentPayments(state).map(p => [p.id, p])), adjustments: {} } };
+  return { ...state, data: { ...state.data, bills: {}, rents: {}, payments: Object.fromEntries(rentPayments(state).filter(p => Number.isFinite(p.amount)).map(p => [p.id, p])), adjustments: {} } };
 }
 export function rentPeriodsFor(state, residentId, today) {
   const r = state.data.residents[residentId];
@@ -66,7 +66,9 @@ export function buildRentLedger(state, today) {
     p.trackingNotStarted = !rentTrackingStart(state, state.data.residents[id]) && !p.items.some(x => x.type === 'rent');
     p.scheduleMissing = !(state.data.residents[id].rentSchedules || []).length && !p.items.some(x => x.type === 'rent');
     p.unassignedAdjustments = adjustments.filter(a => a.residentId === id && !p.items.some(x => x.rentId === a.rentId));
-    p.unassignedPayments = p.payments.filter(x => !x.rentId || !p.items.some(i => i.rentId === x.rentId));
+    const receipts = rentPayments(state).filter(x => x.residentId === id);
+    p.unassignedPayments = receipts.filter(x => !x.rentId || !p.items.some(i => i.rentId === x.rentId));
+    p.incompleteReceipts = receipts.filter(x => !Number.isFinite(x.amount));
     p.incompletePeriods = rentPeriodsFor(state, id, today).filter(x => !completeRentDates(x));
   }
   return L;
@@ -74,13 +76,33 @@ export function buildRentLedger(state, today) {
 const knownAmount = r => r.paid && typeof r.receivedAmount === 'number' && Number.isFinite(r.receivedAmount);
 /** 旧记录内的收款确认作为同一租期的收款使用，不复制或改写原始数据。未知日期仍留空。 */
 export function rentPayments(state) {
-  const embedded = Object.values(state.data.rents).filter(r => !r.deleted && knownAmount(r))
+  const embedded = Object.values(state.data.rents).filter(r => !r.deleted && r.paid && !state.data.payments['receipt:' + r.id])
     .map(r => ({ id: 'receipt:' + r.id, residentId: r.residentId, rentId: r.id, purpose: 'rent',
-      amount: r.receivedAmount, date: isISODate(r.paidDate) ? r.paidDate : '', note: r.note, embeddedRentId: r.id }));
+      amount: r.receivedAmount ?? null, date: isISODate(r.paidDate) ? r.paidDate : '', note: r.receiptNote || '',
+      method: r.receiptMethod || 'other', embeddedRentId: r.id, confirmationOnly: !knownAmount(r), updatedAt: r.updatedAt }));
   return [...Object.values(state.data.payments).filter(p => !p.deleted && p.purpose === 'rent'), ...embedded];
 }
+/** 仅在用户编辑或删除旧收款时转换；固定 id 避免重导或同步时把同一笔钱统计两次。 */
+export function rentReceiptChanges(state, payment) {
+  const { embeddedRentId, ...receipt } = payment;
+  const original = embeddedRentId && state.data.rents[embeddedRentId];
+  return { receipt, rent: original ? { ...original, paid: false, receivedAmount: null, paidDate: null } : null };
+}
+export function rentPeriodSummary(state, period) {
+  const receipts = rentPayments(state).filter(x => x.residentId === period.residentId && x.rentId === period.id);
+  const adjustments = Object.values(state.data.adjustments).filter(x => !x.deleted && x.purpose === 'rent' && x.residentId === period.residentId && x.rentId === period.id);
+  const extra = adjustments.reduce((sum, x) => sum + Math.round(x.amount * 100), 0);
+  const received = receipts.filter(x => x.amount > 0).reduce((sum, x) => sum + Math.round(x.amount * 100), 0);
+  const refunded = receipts.filter(x => x.amount < 0).reduce((sum, x) => sum - Math.round(x.amount * 100), 0);
+  const unknown = receipts.some(x => !Number.isFinite(x.amount));
+  const expected = period.amount == null ? null : (Math.round(period.amount * 100) + extra) / 100;
+  const net = unknown ? null : (received - refunded) / 100;
+  return { receipts, adjustments, extra: extra / 100, received: received / 100, refunded: refunded / 100, expected, net,
+    remaining: expected == null || net == null ? null : Math.round((expected - net) * 100) / 100,
+    incomplete: !completeRentDates(period) || expected == null || unknown || receipts.some(x => !isISODate(x.date)) };
+}
 export function rentReceipts(state) {
-  const payments = rentPayments(state).filter(p => isISODate(p.date) && state.data.residents[p.residentId] && !state.data.residents[p.residentId].deleted && !state.data.residents[p.residentId].isOwner);
+  const payments = rentPayments(state).filter(p => Number.isFinite(p.amount) && isISODate(p.date) && state.data.residents[p.residentId] && !state.data.residents[p.residentId].deleted && !state.data.residents[p.residentId].isOwner);
   const dates = payments.map(p => p.date.slice(0, 7)).sort();
   const months = dates.length ? monthRange(dates[0], dates.at(-1)) : [];
   return { months, values: months.map(k => Math.round(payments.filter(p => p.date.startsWith(k)).reduce((s, p) => s + p.amount, 0) * 100) / 100), payments };
@@ -90,8 +112,9 @@ export function rentRecordSummary(state, residentId) {
     const person = state.data.residents[r.residentId];
     return !r.deleted && person && !person.deleted && !person.isOwner && (!residentId || r.residentId === residentId);
   }).sort((a, b) => (rentDates(b).periodStart || rentDates(b).legacyDate || b.paidDate || '').localeCompare(rentDates(a).periodStart || rentDates(a).legacyDate || a.paidDate || ''));
-  return { records, missing: records.filter(r => isHistory(r) || r.amount == null || !completeRentDates(r) || (r.paid && (!knownAmount(r) || !isISODate(r.paidDate)))),
-    total: Math.round(records.filter(knownAmount).reduce((s, r) => s + r.receivedAmount, 0) * 100) / 100 };
+  const ids = new Set(records.map(r => r.id));
+  return { records, missing: records.filter(r => rentPeriodSummary(state, { ...r, ...rentDates(r), amount: isHistory(r) ? null : r.amount }).incomplete),
+    total: Math.round(rentPayments(state).filter(p => ids.has(p.rentId) && Number.isFinite(p.amount)).reduce((s, p) => s + p.amount, 0) * 100) / 100 };
 }
 export function validateRentRecord(state, rec) {
   const error = validateRentPeriod(state, rec);
