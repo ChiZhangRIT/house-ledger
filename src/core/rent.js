@@ -3,6 +3,7 @@ import { buildLedger, rentCharge, rentOn } from './ledger.js';
 import { monthRange } from './analytics.js';
 import { isISODate, addDays, daysBetween } from './dates.js';
 import { isHistory, rentDates, completeRentDates, rentRef, scheduledPeriods, validateRentPeriod, rentTrackingStart, validSchedule, monthDay, monthAfter } from './rentPeriods.js';
+import { isHousingPayment, paymentAllocations, paymentPortion, paymentTransfer } from './payments.js';
 
 /** 按明确覆盖日期计算建议应收；不以入住、搬出或待收起点再次截短用户填写的区间。 */
 export function calculateRentPeriod(resident, start, end, prorate = 'daily') {
@@ -70,20 +71,34 @@ export function buildRentLedger(state, today) {
     p.unassignedPayments = receipts.filter(x => !x.rentId || !p.items.some(i => i.rentId === x.rentId));
     p.incompleteReceipts = receipts.filter(x => !Number.isFinite(x.amount));
     p.incompletePeriods = rentPeriodsFor(state, id, today).filter(x => !completeRentDates(x));
+    p.hasUnmatchedCredit = p.outstanding > 0.005 && p.credit > 0.005;
   }
   return L;
 }
 const knownAmount = r => r.paid && typeof r.receivedAmount === 'number' && Number.isFinite(r.receivedAmount);
 /** 旧记录内的收款确认作为同一租期的收款使用，不复制或改写原始数据。未知日期仍留空。 */
-export function rentPayments(state) {
+export function housingPayments(state) {
   const embedded = Object.values(state.data.rents).filter(r => !r.deleted && r.paid && !state.data.payments['receipt:' + r.id])
     .map(r => ({ id: 'receipt:' + r.id, residentId: r.residentId, rentId: r.id, purpose: 'rent',
       amount: r.receivedAmount ?? null, date: isISODate(r.paidDate) ? r.paidDate : '', note: r.receiptNote || '',
       method: r.receiptMethod || '', embeddedRentId: r.id, confirmationOnly: !knownAmount(r), updatedAt: r.updatedAt }));
-  return [...Object.values(state.data.payments).filter(p => !p.deleted && p.purpose === 'rent'), ...embedded];
+  return [...Object.values(state.data.payments).filter(p => !p.deleted && isHousingPayment(p)), ...embedded];
+}
+function portions(state, purpose) {
+  return housingPayments(state).flatMap(payment => Array.isArray(payment.allocations)
+    ? paymentAllocations(payment).filter(part => part.purpose === purpose).map(part => paymentPortion(payment, part))
+    : payment.purpose === purpose ? [payment] : []);
+}
+export const rentPayments = state => portions(state, 'rent');
+export function depositSummary(state, residentId) {
+  const payments = portions(state, 'deposit').filter(p => p.residentId === residentId);
+  const received = payments.filter(p => p.amount > 0).reduce((n, p) => n + Math.round(p.amount * 100), 0);
+  const refunded = payments.filter(p => p.amount < 0).reduce((n, p) => n - Math.round(p.amount * 100), 0);
+  return { payments, received: received / 100, refunded: refunded / 100, balance: (received - refunded) / 100 };
 }
 /** 仅在用户编辑或删除旧收款时转换；固定 id 避免重导或同步时把同一笔钱统计两次。 */
 export function rentReceiptChanges(state, payment) {
+  payment = paymentTransfer(state, payment);
   const { embeddedRentId, ...receipt } = payment;
   const original = embeddedRentId && state.data.rents[embeddedRentId];
   return { receipt, rent: original ? { ...original, paid: false, receivedAmount: null, paidDate: null } : null };
@@ -92,7 +107,9 @@ export function rentReceiptChanges(state, payment) {
 export function rentRecordEntries(state, period) {
   return [['rents', state.data.rents[period.id] || period],
     ...['payments', 'adjustments'].flatMap(collection => Object.values(state.data[collection])
-      .filter(x => !x.deleted && x.purpose === 'rent' && x.residentId === period.residentId && x.rentId === period.id)
+      .filter(x => !x.deleted && x.residentId === period.residentId && (collection === 'payments'
+        ? isHousingPayment(x) && paymentAllocations(x).length > 0 && paymentAllocations(x).every(part => part.purpose === 'rent' && part.rentId === period.id)
+        : x.purpose === 'rent' && x.rentId === period.id))
       .map(x => [collection, x]))];
 }
 export function rentPeriodSummary(state, period) {

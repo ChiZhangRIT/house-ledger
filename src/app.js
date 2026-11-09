@@ -1,7 +1,7 @@
 // 合租账本：启动、数据、路由、同步。各页面在 views/ 里，计算在 core/ 里。
 import { normalizeState, mergeStates, stamp, live, canon, deletedRecord } from './core/store.js';
 import { createSync } from './core/sync.js';
-import { buildRentLedger } from './core/rent.js';
+import { buildRentLedger, housingPayments } from './core/rent.js';
 import { today } from './core/dates.js';
 import { t, setLang, getLang, LANGS } from './i18n.js';
 import { h, $, toast } from './ui/dom.js';
@@ -84,7 +84,7 @@ function derived() {
   cache = {
     today: todayIso, providers, bills: allBills, residents: res,
     providerList: live(S, 'providers'),
-    payments: live(S, 'payments').filter(p => p.purpose === 'rent').sort((a, b) => (a.date < b.date ? 1 : -1)),
+    payments: housingPayments(S).sort((a, b) => (a.date < b.date ? 1 : -1)),
   };
   cache.ledger = buildRentLedger(S, todayIso);
   /** 同一类别的账单（网费换过公司也算一类），对比用 */

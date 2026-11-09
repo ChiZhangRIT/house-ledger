@@ -2,7 +2,8 @@
 import { h } from '../ui/dom.js';
 import { t, money, date } from '../i18n.js';
 import { rentOn } from '../core/ledger.js';
-import { rentPeriodsFor, rentPeriodSummary } from '../core/rent.js';
+import { rentPeriodsFor, rentPeriodSummary, depositSummary } from '../core/rent.js';
+import { paymentTransfer, paymentAllocations } from '../core/payments.js';
 import { avatar, emptyState, statusChip } from './parts.js';
 import { rentStatus } from './tenants.js';
 import { openPayment, openAdjustment } from './money.js';
@@ -20,6 +21,7 @@ export function render(root, ctx, [id]) {
     h('div', null, h('h2', null, r.name), h('div.small.muted', null, date(r.moveIn), ' – ', r.moveOut ? date(r.moveOut) : t('res.now'))),
     h('span.sp'), p ? rentStatus(p) : null),
     h('p', null, r.isOwner ? t('res.owner') : rent == null ? t('rent.monthlyUnknown') : t('res.rentNow', { amount: rent })),
+    p?.hasUnmatchedCredit ? h('p.note', null, t('housing.unmatchedTotals', { owed: p.outstanding, paid: p.credit })) : null,
     h('button.btn', { type: 'button', onclick: () => openResident(ctx, r) }, t('res.edit'))));
   const notes = recordNotes(ctx, 'residents', r);
   if (notes) root.append(h('details.card', null, h('summary', null, t('rent.residentNotes')), notes));
@@ -57,8 +59,19 @@ export function render(root, ctx, [id]) {
   const more = h('details.rent-more', null, h('summary', null, t('rent.more')),
     h('button.link-btn', { type: 'button', onclick: () => openRentPeriod(ctx, id) }, t('rent.addUnpaidPeriod')));
   root.append(h('section.card', null, h('div.row', null, h('h2.section-h', null, t('rent.account')), h('span.sp'),
-    h('button.btn.primary', { type: 'button', onclick: () => openPayment(ctx, { residentId: id }) }, '＋ ' + t('rent.record')), more), list,
+    h('button.btn.primary', { type: 'button', onclick: () => openPayment(ctx, { residentId: id }) }, '＋ ' + t('housing.record')), more), list,
     p.unassignedAdjustments.length ? h('details', null, h('summary', null, t('rent.unassignedAdjustments')),
       p.unassignedAdjustments.map(a => h('div.rent-transaction', null, h('span', null, a.label), h('span.num', null, money(a.amount)),
         h('button.link-btn', { type: 'button', onclick: () => openAdjustment(ctx, { residentId: id, adjustment: a }) }, t('bill.edit'))))) : null));
+  const deposits = depositSummary(ctx.S, id);
+  const depositStat = (label, value) => h('div', null, h('span.small.muted', null, label), h('div.rent-detail-value.num', null, money(value)));
+  root.append(h('section.card.deposit-card', null, h('div.row', null, h('h2.section-h', null, t('housing.deposit')), h('span.sp'),
+    h('button.btn', { type: 'button', onclick: () => openPayment(ctx, { residentId: id, purpose: 'deposit' }) }, '＋ ' + t('deposit.record'))),
+    h('p.note', null, t('housing.depositSeparate')),
+    h('div.rent-detail-summary', null, depositStat(t('deposit.received'), deposits.received), depositStat(t('deposit.refunded'), deposits.refunded), depositStat(t('deposit.balance'), deposits.balance)),
+    deposits.payments.map(payment => h('div.rent-transaction', null,
+      h('div', null, h('div', null, payment.date ? date(payment.date, 'iso') : t(payment.dateUnavailable === true ? 'rent.dateUnavailable' : 'rent.receiptDatePending'), ' · ', t(payment.amount < 0 ? 'deposit.refund' : 'deposit.receipt')),
+        h('div.small.muted', null, payment.method ? t('method.' + payment.method) : t('rent.methodPending'), payment.note ? ' · ' + payment.note : ''),
+        payment.transferId && paymentAllocations(paymentTransfer(ctx.S, payment)).length > 1 ? h('div.small.muted', null, t('housing.partOfTransfer', { total: paymentTransfer(ctx.S, payment).amount })) : null),
+      h('span.num', null, money(payment.amount)), h('button.link-btn', { type: 'button', onclick: () => openPayment(ctx, { residentId: id, payment }) }, t('bill.edit'))))));
 }

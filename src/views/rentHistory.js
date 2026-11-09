@@ -2,7 +2,7 @@
 import { h, openSheet, signButton } from '../ui/dom.js';
 import { t, money } from '../i18n.js';
 import { newId } from '../core/store.js';
-import { validateRentRecord, calculateRentPeriod, rentRecordEntries } from '../core/rent.js';
+import { validateRentRecord, calculateRentPeriod, rentRecordEntries, rentPayments } from '../core/rent.js';
 import { isHistory, rentDates } from '../core/rentPeriods.js';
 import { parseAmount } from '../ui/parse.js';
 
@@ -127,8 +127,11 @@ export function openRentPeriod(ctx, residentId, record, { onSave } = {}) {
 
 /** 删除整行，包括只属于这一租期的收支；完整快照可撤销或从最近删除恢复。 */
 export function deleteRentRecord(ctx, record, onChange) {
+  const entries = rentRecordEntries(ctx.S, record);
+  const shared = rentPayments(ctx.S).some(payment => payment.rentId === record.id && payment.residentId === record.residentId && payment.transferId
+    && !entries.some(([collection, entry]) => collection === 'payments' && entry.id === payment.transferId));
   const confirmation = openSheet({ title: t('rent.deleteRecord'), closeLabel: t('rent.close'), body: h('div', null,
-    h('p', null, rentRange(record)), h('p', null, t('rent.rowDeleteConfirm'))),
+    h('p', null, rentRange(record)), h('p', null, t(shared ? 'housing.deleteSharedPeriod' : 'rent.rowDeleteConfirm'))),
     foot: [h('span.sp'), h('button.btn', { type: 'button', onclick: () => confirmation.close() }, t('cancel')),
       h('button.btn.danger', { type: 'button', onclick: () => {
         const entries = rentRecordEntries(ctx.S, record);

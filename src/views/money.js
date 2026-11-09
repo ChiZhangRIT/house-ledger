@@ -4,6 +4,7 @@ import { t, money, date, period, getLang } from '../i18n.js';
 import { newId } from '../core/store.js';
 import { addDays, isISODate } from '../core/dates.js';
 import { buildRentLedger, rentPeriodsFor, rentReceiptChanges } from '../core/rent.js';
+import { paymentAllocations, paymentTransfer, allocationError } from '../core/payments.js';
 import { openRentPeriod, rentRange } from './rentHistory.js';
 import { buildStatement } from '../core/statement.js';
 import { parseAmount } from '../ui/parse.js';
@@ -13,97 +14,149 @@ export const METHODS = ['zelle', 'venmo', 'wechat', 'alipay', 'cash', 'check', '
 const lastMethod = (ctx, rid) => { const p = ctx.D.payments.find(x => x.residentId === rid && x.method); return p ? p.method : 'zelle'; };
 const rentPeople = ctx => ctx.D.residents.filter(r => !r.isOwner).sort((a, b) => Number(!!a.moveOut && a.moveOut <= ctx.D.today) - Number(!!b.moveOut && b.moveOut <= ctx.D.today) || b.moveIn.localeCompare(a.moveIn));
 
-/** 收款先明确覆盖租期，再记录实际到账；可分次，也可提前付。 */
-export function openPayment(ctx, { residentId, amount, rentId, payment, refund = false, onSave } = {}) {
-  let L;
+/** 一笔收支保留一个总额和日期，按明确用途分配给多个租期及押金。 */
+export function openPayment(ctx, { residentId, amount, rentId, payment, refund = false, purpose = 'rent', onSave } = {}) {
+  payment = paymentTransfer(ctx.S, payment);
   const people = rentPeople(ctx);
-  let rid = payment?.residentId || residentId || people[0]?.id, selected = payment?.rentId || rentId || '';
-  let rows = [], chosen;
+  let rid = payment?.residentId || residentId || people[0]?.id, rows = [], L;
   const initialAmount = payment?.amount ?? amount ?? null;
-  const f = { amount: initialAmount == null ? null : Math.abs(initialAmount), refund: initialAmount < 0 || refund, date: payment ? payment.date || '' : ctx.D.today,
-    dateUnavailable: payment?.dateUnavailable === true, method: payment ? (payment.method || 'other') : lastMethod(ctx, rid), note: payment?.note || '' };
-  const prevEl = h('p.note'), datesEl = h('p'), quick = h('div.chips');
+  const target = part => part.purpose === 'deposit' ? 'deposit' : part.rentId ? 'rent:' + part.rentId : 'unassigned';
+  let parts = payment ? paymentAllocations(payment).map(part => ({ target: target(part), amount: part.amount == null ? null : Math.abs(part.amount) }))
+    : [{ target: purpose === 'deposit' ? 'deposit' : rentId ? 'rent:' + rentId : 'unassigned', amount: initialAmount }];
+  let split = parts.length > 1;
+  const f = { amount: initialAmount == null ? null : Math.abs(initialAmount), refund: initialAmount < 0 || refund,
+    date: payment ? payment.date || '' : ctx.D.today, dateUnavailable: payment?.dateUnavailable === true,
+    method: payment ? payment.method || 'other' : lastMethod(ctx, rid), note: payment?.note || '' };
+  const err = h('p.err', { hidden: true }), prevEl = h('p.note'), quick = h('div.chips'), allocationBody = h('div.form');
   const amountLabel = h('span.field-label'), dateLabel = h('span.field-label');
   const dateInput = h('input', { type: 'date', value: f.dateUnavailable ? '' : f.date, disabled: f.dateUnavailable, oninput: e => { f.date = e.target.value; } });
   const dateHint = h('p.note', { hidden: !f.dateUnavailable }, t('rent.dateUnavailableHint'));
   const dateOption = h('label.check-line', null, h('input', { type: 'checkbox', checked: f.dateUnavailable, onchange: e => {
     f.dateUnavailable = e.target.checked; dateInput.disabled = f.dateUnavailable; dateInput.value = f.dateUnavailable ? '' : f.date; dateHint.hidden = !f.dateUnavailable;
   } }), h('span', null, t('rent.dateUnavailableOption')));
-  const amtIn = h('input.big-amt', { inputmode: 'decimal', value: f.amount ?? '', oninput: e => { f.amount = parseAmount(e.target.value); preview(); } });
-  const preview = () => {
-    amountLabel.textContent = t(f.refund ? 'rent.refundAmount' : 'rent.receivedAmount');
-    dateLabel.textContent = t(f.refund ? 'rent.refundDate' : 'rent.receivedDate');
-    chosen = rows.find(x => x.id === selected);
-    datesEl.textContent = chosen ? t('rent.selectedPeriod', { due: chosen.dueDate || '—', start: chosen.periodStart || '—', end: chosen.periodEnd || '—' }) : t('rent.unassignedHint');
-    const item = L.people[rid]?.items.find(x => x.rentId === selected);
-    const received = (L.people[rid]?.payments || []).filter(x => x.rentId === selected).reduce((sum, x) => sum + x.amount, 0);
-    const expected = item ? (item.unknown ? null : item.cents / 100) : chosen?.amount;
-    const incomplete = L.people[rid]?.incompleteReceipts.some(x => x.rentId === selected) || (payment && f.amount == null);
-    const left = chosen && expected != null && !incomplete ? Math.round((expected - received) * 100) / 100 : null;
-    quick.replaceChildren(...(left > 0 && !f.refund ? [ h('button.chip', { type: 'button', onclick: () => { f.amount = left; amtIn.value = left.toFixed(2); preview(); } }, t('rent.periodRemaining') + ' ' + money(left))] : []));
-    prevEl.hidden = !chosen;
-    prevEl.textContent = left == null ? t('rent.receiptOnlyHint') : t('rent.periodBalance', { amount: left - (f.refund ? -1 : 1) * (f.amount || 0) });
-  };
-  const periodSelect = h('select', { onchange: e => {
-    if (e.target.value === 'new') {
-      periodSelect.value = selected;
-      openRentPeriod(ctx, rid, null, { onSave: rec => { selected = rec?.id || ''; refreshPeriods(); } });
-    } else { selected = e.target.value; preview(); }
+  const amtIn = h('input.big-amt', { inputmode: 'decimal', value: f.amount ?? '', oninput: e => {
+    f.amount = parseAmount(e.target.value); if (!split) parts[0].amount = f.amount; preview();
   } });
-  const refreshPeriods = (auto = false) => {
-    L = buildRentLedger(payment ? { ...ctx.S, data: { ...ctx.S.data, payments: { ...ctx.S.data.payments, [payment.id]: { ...payment, deleted: true } } } } : ctx.S, ctx.D.today);
-    rows = rentPeriodsFor(ctx.S, rid, ctx.D.today);
-    if (auto && !selected) selected = rows.find(x => L.people[rid]?.debits.some(d => d.rentId === x.id && d.remaining > 0))?.id || rows.find(x => x.periodEnd >= ctx.D.today)?.id || '';
-    periodSelect.replaceChildren(h('option', { value: '', selected: !selected }, t('rent.coverageLater')),
-      ...rows.map(x => h('option', { value: x.id, selected: x.id === selected }, rentRange(x) + (x.dueDate ? ' · ' + t('rent.dueShort') + ' ' + x.dueDate : ''))),
+  function preview() {
+    amountLabel.textContent = t(f.refund ? 'housing.totalRefunded' : 'housing.totalReceived');
+    dateLabel.textContent = t(f.refund ? 'rent.refundDate' : 'rent.receivedDate');
+    quick.replaceChildren();
+    if (split) {
+      const cents = parts.reduce((n, part) => n + (Number.isFinite(part.amount) ? Math.round(part.amount * 100) : 0), 0);
+      prevEl.textContent = t('housing.allocationTotals', { paid: cents / 100, total: f.amount == null ? '—' : money(f.amount), diff: f.amount == null ? '—' : money((Math.round(f.amount * 100) - cents) / 100) });
+      return;
+    }
+    const chosen = rows.find(row => 'rent:' + row.id === parts[0].target);
+    if (!chosen) { prevEl.textContent = t(parts[0].target === 'deposit' ? 'housing.depositSeparate' : 'rent.unassignedHint'); return; }
+    const person = L.people[rid], item = person?.items.find(x => x.rentId === chosen.id);
+    const received = (person?.payments || []).filter(x => x.rentId === chosen.id).reduce((n, x) => n + x.amount, 0);
+    const expected = item ? item.unknown ? null : item.cents / 100 : chosen.amount;
+    const incomplete = person?.incompleteReceipts.some(x => x.rentId === chosen.id) || (payment && f.amount == null);
+    const left = expected != null && !incomplete ? Math.round((expected - received) * 100) / 100 : null;
+    if (left > 0 && !f.refund) quick.append(h('button.chip', { type: 'button', onclick: () => {
+      f.amount = left; parts[0].amount = left; amtIn.value = left.toFixed(2); preview();
+    } }, t('rent.periodRemaining') + ' ' + money(left)));
+    prevEl.textContent = left == null ? t('rent.receiptOnlyHint') : t('rent.periodBalance', { amount: left - (f.refund ? -1 : 1) * (f.amount || 0) });
+  }
+  function targetSelect(part) {
+    const select = h('select', { onchange: e => {
+      if (e.target.value === 'new') {
+        select.value = part.target;
+        openRentPeriod(ctx, rid, null, { onSave: rec => { if (rec) part.target = 'rent:' + rec.id; refreshPeriods(); } });
+      } else { part.target = e.target.value; renderAllocations(); }
+    } }, h('option', { value: 'unassigned', selected: part.target === 'unassigned' }, t('housing.rentLater')),
+      ...rows.map(row => h('option', { value: 'rent:' + row.id, selected: part.target === 'rent:' + row.id }, rentRange(row) + (row.dueDate ? ' · ' + t('rent.dueShort') + ' ' + row.dueDate : ''))),
+      h('option', { value: 'deposit', selected: part.target === 'deposit' }, t('housing.deposit')),
       h('option', { value: 'new' }, t('rent.newPeriod')));
-    if (selected && !rows.some(x => x.id === selected)) { selected = ''; periodSelect.value = ''; }
+    if (part.target.startsWith('rent:') && !rows.some(row => part.target === 'rent:' + row.id)) select.append(h('option', { value: part.target, selected: true }, t('housing.missingPeriod')));
+    return select;
+  }
+  function renderAllocations() {
+    const fields = parts.map((part, index) => {
+      const chosen = rows.find(row => 'rent:' + row.id === part.target);
+      const purposeField = h('label.field', null, h('span.field-label', null, t('housing.use')), targetSelect(part));
+      const coverage = chosen ? h('p.note', null, t('rent.selectedPeriod', { due: chosen.dueDate || '—', start: chosen.periodStart || '—', end: chosen.periodEnd || '—' })) : null;
+      if (!split) return h('div.form', null, purposeField, coverage,
+        h('button.link-btn', { type: 'button', onclick: () => { split = true; sheet.el.classList.add('wide'); parts.push({ target: 'unassigned', amount: null }); renderAllocations(); } }, t('housing.split')));
+      return h('fieldset.payment-allocation', null, h('div.field-row', null, purposeField,
+        h('label.field', null, h('span.field-label', null, t('housing.partAmount')), h('input', { inputmode: 'decimal', value: part.amount ?? '', oninput: e => { part.amount = parseAmount(e.target.value); preview(); } }))), coverage,
+        h('button.link-btn.danger', { type: 'button', disabled: parts.length < 2, onclick: () => { parts.splice(index, 1); renderAllocations(); } }, t('rent.removeChargeItem')));
+    });
+    allocationBody.replaceChildren(...fields);
+    if (split) allocationBody.append(h('button.btn', { type: 'button', onclick: () => { parts.push({ target: 'unassigned', amount: null }); renderAllocations(); } }, '＋ ' + t('housing.addAllocation')));
     preview();
-  };
-  const sel = h('select', { onchange: e => { rid = e.target.value; selected = ''; f.method = lastMethod(ctx, rid); refreshPeriods(true); renderMethods(); } }, people.map(r => h('option', { value: r.id, selected: r.id === rid }, r.name)));
+  }
+  function refreshPeriods(auto = false) {
+    const without = payment ? { ...ctx.S, data: { ...ctx.S.data, payments: { ...ctx.S.data.payments, [payment.id]: { ...payment, deleted: true } } } } : ctx.S;
+    L = buildRentLedger(without, ctx.D.today); rows = rentPeriodsFor(ctx.S, rid, ctx.D.today);
+    if (auto && parts[0].target === 'unassigned') {
+      const next = rows.find(row => L.people[rid]?.debits.some(d => d.rentId === row.id && d.remaining > 0)) || rows.find(row => row.periodEnd >= ctx.D.today);
+      if (next) parts[0].target = 'rent:' + next.id;
+    }
+    renderAllocations();
+  }
   const methods = h('div.chips', { role: 'radiogroup', 'aria-label': t('pay.method') });
-  const renderMethods = () => methods.replaceChildren(...METHODS.map(m => h('button.chip' + (f.method === m ? '.on' : ''), { type: 'button', role: 'radio', 'aria-checked': String(f.method === m), onclick: () => { f.method = m; renderMethods(); } }, t('method.' + m))));
+  const renderMethods = () => methods.replaceChildren(...METHODS.map(method => h('button.chip' + (f.method === method ? '.on' : ''), { type: 'button', role: 'radio', 'aria-checked': String(f.method === method), onclick: () => { f.method = method; renderMethods(); } }, t('method.' + method))));
+  const personSelect = h('select', { onchange: e => {
+    rid = e.target.value; parts = [{ target: purpose === 'deposit' ? 'deposit' : 'unassigned', amount: f.amount }]; split = false;
+    f.method = lastMethod(ctx, rid); refreshPeriods(true); renderMethods();
+  } }, people.map(person => h('option', { value: person.id, selected: person.id === rid }, person.name)));
   renderMethods(); refreshPeriods(!payment);
   const save = () => {
-    const incomplete = payment && (payment.embeddedRentId || payment.confirmationOnly) && f.amount == null && !f.refund;
-    if ((!incomplete && (!Number.isFinite(f.amount) || f.amount < 0 || (f.amount === 0 && !payment) || f.amount > 1e7)) || !rid) { amtIn.focus(); return; }
+    const incomplete = payment && (payment.embeddedRentId || payment.confirmationOnly) && f.amount == null && !f.refund && !split && parts[0].target !== 'deposit';
+    const fail = key => { err.textContent = t('housing.error.' + key); err.hidden = false; };
+    if (!rid || !ctx.S.data.residents[rid] || ctx.S.data.residents[rid].deleted || ctx.S.data.residents[rid].isOwner) { fail('resident'); return; }
+    if (!incomplete && (!Number.isFinite(f.amount) || f.amount < 0 || (f.amount === 0 && !payment) || f.amount > 1e7)) { fail('amount'); amtIn.focus(); return; }
     const receiptDate = f.dateUnavailable ? '' : f.date;
-    if (receiptDate && !isISODate(receiptDate)) { prevEl.hidden = false; prevEl.textContent = t('rent.historyError.date'); return; }
+    if (receiptDate && !isISODate(receiptDate)) { fail('date'); return; }
+    const currentRows = rentPeriodsFor(ctx.S, rid, ctx.D.today);
+    if (parts.some(part => part.target.startsWith('rent:') && !currentRows.some(row => part.target === 'rent:' + row.id))) { fail('period'); return; }
     const current = payment && (payment.embeddedRentId ? ctx.S.data.rents[payment.embeddedRentId] : ctx.S.data.payments[payment.id]);
     if (current && current.updatedAt !== payment.updatedAt && !confirm(t(current.deleted ? 'form.deletedElsewhere' : 'form.changedElsewhere'))) return;
+    const changes = payment ? rentReceiptChanges(ctx.S, payment) : { receipt: {}, rent: null };
+    const sign = f.refund ? -1 : 1;
+    const allocations = parts.map(part => ({ purpose: part.target === 'deposit' ? 'deposit' : 'rent', rentId: part.target.startsWith('rent:') ? part.target.slice(5) : null,
+      amount: Number.isFinite(part.amount) ? Math.round(part.amount * 100) / 100 * sign : null }));
+    const draft = { ...changes.receipt, deleted: undefined, deletedAt: undefined, id: payment?.id || 'pay_' + newId(), residentId: rid,
+      purpose: incomplete ? 'rent' : 'housing', rentId: incomplete ? allocations[0].rentId : null, allocations: incomplete ? undefined : allocations,
+      date: receiptDate, dateUnavailable: f.dateUnavailable || undefined, amount: incomplete ? null : Math.round(f.amount * 100) / 100 * sign,
+      confirmationOnly: incomplete || undefined, method: f.method, note: f.note };
+    const error = allocationError(draft);
+    if (error) { fail(error); return; }
     let rec;
     ctx.batch(() => {
-      const changes = payment ? rentReceiptChanges(ctx.S, payment) : { receipt: {}, rent: null };
       if (changes.rent) ctx.put('rents', changes.rent);
-      if (chosen && !ctx.S.data.rents[chosen.id]) ctx.put('rents', chosen);
-      rec = ctx.put('payments', { ...changes.receipt, deleted: undefined, deletedAt: undefined, id: payment?.id || 'pay_' + newId(), purpose: 'rent', residentId: rid, rentId: chosen?.id || null,
-        date: receiptDate, dateUnavailable: f.dateUnavailable || undefined, amount: incomplete ? null : f.amount * (f.refund ? -1 : 1), confirmationOnly: incomplete || undefined, method: f.method, note: f.note });
+      for (const part of allocations) if (part.rentId && !ctx.S.data.rents[part.rentId]) ctx.put('rents', currentRows.find(row => row.id === part.rentId));
+      rec = ctx.put('payments', draft);
     });
     sheet.close(); onSave?.(rec);
-    ctx.toast(rec.amount == null ? t('res.saved') : t('pay.saved', { amount: rec.amount, name: residentName(ctx, rid) }), { action: t('undo'), onAction: () => {
+    ctx.toast(t('res.saved'), { action: t('undo'), onAction: () => {
       if (payment) ctx.put('payments', rentReceiptChanges(ctx.S, payment).receipt); else ctx.remove('payments', rec.id);
       onSave?.();
     }, ms: 10000 });
   };
-  const sheet = openSheet({ title: t(payment ? 'rent.editReceipt' : f.refund ? 'rent.recordRefund' : 'rent.record'), closeLabel: t('rent.close'),
+  const sheet = openSheet({ title: t(payment ? 'housing.editTransfer' : refund ? 'rent.recordRefund' : 'housing.record'), wide: split, closeLabel: t('rent.close'),
     body: h('form.form', { onsubmit: e => { e.preventDefault(); save(); } },
-      residentId ? h('p', null, residentName(ctx, residentId)) : h('label.field', null, h('span.field-label', null, t('pay.who')), sel),
-      h('label.field', null, h('span.field-label', null, t('rent.coverage')), periodSelect), datesEl,
+      residentId ? h('p', null, residentName(ctx, residentId)) : h('label.field', null, h('span.field-label', null, t('pay.who')), personSelect),
       h('label.field', null, h('span.field-label', null, t('rent.receiptType')), h('select', { onchange: e => { f.refund = e.target.value === 'refund'; preview(); } },
-        ['receipt', 'refund'].map(k => h('option', { value: k, selected: f.refund === (k === 'refund') }, t('rent.' + k))))),
-      h('label.field', null, amountLabel, amtIn, h('span.hint', null, t('rent.refundHint'))), quick,
-      h('div.field-row', null,
-        h('div.field', null, h('label.field', null, dateLabel, dateInput), dateOption, dateHint),
+        ['receipt', 'refund'].map(kind => h('option', { value: kind, selected: f.refund === (kind === 'refund') }, t('rent.' + kind))))),
+      h('label.field', null, amountLabel, amtIn, h('span.hint', null, t('housing.amountHint'))), quick,
+      h('div.field-row', null, h('div.field', null, h('label.field', null, dateLabel, dateInput), dateOption, dateHint),
         h('div.field', null, h('span.field-label', null, t('pay.method')), methods)),
-      h('label.field', null, h('span.field-label', null, t('form.note')), h('input', { value: f.note, placeholder: t('pay.notePh'), oninput: e => { f.note = e.target.value; } })),
-      prevEl, h('p.note', null, t('rent.assignmentHint')), h('button', { type: 'submit', hidden: true })),
+      h('section.form', null, h('h3', null, t('housing.allocationTitle')), allocationBody, prevEl),
+      h('label.field', null, h('span.field-label', null, t('form.note')), h('input', { value: f.note, placeholder: t('pay.notePh'), oninput: e => { f.note = e.target.value; } })), err,
+      h('button', { type: 'submit', hidden: true })),
     foot: [payment ? h('button.btn.danger', { type: 'button', onclick: () => deleteRentPayment(ctx, payment, () => { sheet.close(); onSave?.(); }) }, t('bill.delete')) : null,
-      h('span.sp'), h('button.btn', { type: 'button', onclick: () => sheet.close() }, t('cancel')), h('button.btn.primary', { type: 'button', onclick: save }, t('pay.save'))].filter(Boolean),
+      h('span.sp'), h('button.btn', { type: 'button', onclick: () => sheet.close() }, t('cancel')), h('button.btn.primary', { type: 'button', onclick: save }, t('save'))].filter(Boolean),
   });
 }
 
 export function deleteRentPayment(ctx, payment, onChange) {
-  const confirmation = openSheet({ title: t('bill.delete'), closeLabel: t('rent.close'), body: h('p', null, t('pay.deleteConfirm')),
+  payment = paymentTransfer(ctx.S, payment);
+  payment = ctx.S.data.payments[payment.id] || payment;
+  const confirmation = openSheet({ title: t('bill.delete'), closeLabel: t('rent.close'), body: h('div', null,
+    h('p', null, t('housing.totalAmount'), ' · ', money(payment.amount)),
+    h('p', null, t(paymentAllocations(payment).length > 1 ? 'housing.deleteTransferConfirm' : 'pay.deleteConfirm'))),
     foot: [h('span.sp'), h('button.btn', { type: 'button', onclick: () => confirmation.close() }, t('cancel')),
       h('button.btn.danger', { type: 'button', onclick: () => {
         let previous;

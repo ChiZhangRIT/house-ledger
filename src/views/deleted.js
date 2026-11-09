@@ -13,6 +13,7 @@ const label = (ctx, c, r) => {
   if (c === 'residents') return r.name || r.id;
   if (c === 'comments') return (r.comments?.[0]?.text || '').slice(0, 100) || r.id;
   const name = ctx.S.data.residents[r.residentId]?.name || r.residentId || r.id;
+  if (c === 'payments') return name + (r.date ? ' · ' + date(r.date, 'iso') : '') + ' · ' + money(r.amount);
   return name + (c === 'rents' ? ' · ' + rentRange(r) : r.date ? ' · ' + date(r.date, 'iso') : '');
 };
 

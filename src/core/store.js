@@ -3,6 +3,7 @@
 
 import { isISODate } from './dates.js';
 import { rentTrackingStart } from './rentPeriods.js';
+import { isHousingPayment, allocationError } from './payments.js';
 
 export const COLLECTIONS = ['providers', 'residents', 'bills', 'payments', 'rents', 'adjustments', 'exports', 'dismissals', 'comments', 'servicePeriods'];
 // 不认识的集合（以后的版本新加的）也原样保留、照样合并，旧版 app 同步时不会把它们弄丢
@@ -51,7 +52,7 @@ const VALIDATE = {
       : { mode: 'auto' },
     source: isObj(r.source) ? r.source : {},
   } : null),
-  payments: r => (typeof r.residentId === 'string' && (ISO(r.date) || (r.purpose === 'rent' && !r.date))
+  payments: r => (typeof r.residentId === 'string' && (ISO(r.date) || (isHousingPayment(r) && !r.date)) && !allocationError(r)
     && (amount(r.amount) || (r.purpose === 'rent' && r.confirmationOnly === true && r.amount == null)) ? { ...r, date: r.date || '' } : null),
   rents: r => (typeof r.residentId === 'string' && ((typeof r.periodStart === 'string' && /^\d{4}-\d{2}/.test(r.periodStart)) || ISO(r.legacyDate) || ISO(r.dueDate) || ISO(r.paidDate)) ? { ...r, amount: amount(r.amount) ? r.amount : null, receivedAmount: amount(r.receivedAmount) && r.receivedAmount >= 0 ? r.receivedAmount : null } : null),
   adjustments: r => (typeof r.residentId === 'string' && MONTH(r.collectPeriod) && amount(r.amount) ? r : null),

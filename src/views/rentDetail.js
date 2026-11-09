@@ -6,6 +6,7 @@ import { statusChip } from './parts.js';
 import { openPayment } from './money.js';
 import { openRentPeriod, rentRange, deleteRentRecord } from './rentHistory.js';
 import { recordNotes } from './notes.js';
+import { paymentTransfer, paymentAllocations } from '../core/payments.js';
 
 export function rentPeriodStatus(summary) {
   if (summary.incomplete || summary.remaining == null) return statusChip('unknown', t('rent.incomplete'));
@@ -31,7 +32,8 @@ export function openRentDetail(ctx, residentId, record) {
     for (const payment of [...summary.receipts].sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))) {
       receipts.append(h('div.rent-transaction', null,
         h('div', null, h('div', null, payment.date ? date(payment.date, 'iso') : t(payment.dateUnavailable === true ? 'rent.dateUnavailable' : 'rent.receiptDatePending'), ' · ', t(payment.amount < 0 ? 'rent.refund' : 'rent.receipt')),
-          h('div.small.muted', null, payment.method ? t('method.' + payment.method) : t('rent.methodPending'), payment.note ? ' · ' + payment.note : '')),
+          h('div.small.muted', null, payment.method ? t('method.' + payment.method) : t('rent.methodPending'), payment.note ? ' · ' + payment.note : ''),
+          payment.transferId && paymentAllocations(paymentTransfer(ctx.S, payment)).length > 1 ? h('div.small.muted', null, t('housing.partOfTransfer', { total: paymentTransfer(ctx.S, payment).amount })) : null),
         h('span.num', null, payment.amount == null ? t('rent.amountMissing') : money(payment.amount)),
         h('button.link-btn', { type: 'button', onclick: () => openPayment(ctx, { residentId, payment, onSave: draw }) }, t('bill.edit'))));
     }

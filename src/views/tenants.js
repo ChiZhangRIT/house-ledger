@@ -7,31 +7,34 @@ import { columnChart } from '../ui/charts.js';
 import { avatar, statusChip } from './parts.js';
 import { openResident } from './residents.js';
 import { openPayment } from './money.js';
+import { isHousingPayment } from '../core/payments.js';
 
 export function rentStatus(p) {
-  if ((p?.unassignedPayments?.length || p?.unassignedAdjustments?.length)) return statusChip('unknown', t('rent.datesPending'));
+  if ((p?.unassignedPayments?.length || p?.unassignedAdjustments?.length)) return statusChip('unknown', t('housing.unassigned'));
   if (p?.trackingNotStarted) return statusChip('none', t('rent.trackingNotStarted'));
   if (p?.scheduleMissing) return statusChip('unknown', t('rent.scheduleMissing'));
   if (!p || !p.items.length) return statusChip('none', t('rent.notStarted'));
   if (p.unknownRent.length || p.incompletePeriods?.length || p.incompleteReceipts?.length) return statusChip('unknown', t('rent.unknown'));
+  if (p.hasUnmatchedCredit) return statusChip(Math.abs(p.balance) < 0.005 ? 'good' : 'warning', t(Math.abs(p.balance) < 0.005 ? 'housing.rentBalanced' : p.balance > 0 ? 'housing.netDue' : 'housing.netCredit', { amount: Math.abs(p.balance) }));
   if (p.overdue > 0.005) return statusChip('critical', t('st.overdue', { amount: p.overdue, days: p.overdueDays }));
   if (p.outstanding > 0.005) return statusChip('warning', t('st.due', { amount: p.outstanding }));
   if (p.credit > 0.005) return statusChip('credit', t('st.credit', { amount: p.credit }));
-  return statusChip('good', t('st.settled'));
+  return statusChip('good', t('housing.rentSettled'));
 }
 
 export function render(root, ctx) {
   const D = ctx.D, receipts = rentReceipts(ctx.S), tenants = D.residents.filter(r => !r.isOwner);
   root.append(h('div.page-intro', null, h('p.muted', null, t('rent.intro')),
     h('div.row', null, h('button.btn', { type: 'button', onclick: () => openResident(ctx, null) }, '＋ ' + t('res.add')),
-      tenants.length ? h('button.btn.primary', { type: 'button', onclick: () => openPayment(ctx) }, '＋ ' + t('rent.record')) : null)));
+      tenants.length ? h('button.btn.primary', { type: 'button', onclick: () => openPayment(ctx) }, '＋ ' + t('housing.record')) : null)));
   const currentMonth = D.today.slice(0, 7);
   const stat = (label, value) => h('div.stat', null, h('span.stat-label', null, label), h('span.stat-value.num', null, value));
   root.append(h('section.stats', null,
     stat(t('rent.living'), String(tenants.filter(r => r.moveIn <= D.today && (!r.moveOut || r.moveOut > D.today)).length)),
     stat(t('rent.receivedMonth'), money(receipts.payments.filter(p => p.date.startsWith(currentMonth)).reduce((s, p) => s + p.amount, 0))),
-    stat(t('rent.knownDue'), money(Object.values(D.ledger.people).reduce((s, p) => s + ((p.unassignedPayments.length || p.unassignedAdjustments.length || p.incompleteReceipts?.length || p.incompletePeriods?.length) ? 0 : p.overdue), 0)))));
+    stat(t('rent.knownDue'), money(Object.values(D.ledger.people).reduce((s, p) => s + ((p.hasUnmatchedCredit || p.unassignedPayments.length || p.unassignedAdjustments.length || p.incompleteReceipts?.length || p.incompletePeriods?.length) ? 0 : p.overdue), 0)))));
   if (Object.values(D.ledger.people).some(p => p.unknownRent.length || p.scheduleMissing || p.unassignedPayments.length || p.unassignedAdjustments.length || p.incompleteReceipts?.length || p.incompletePeriods?.length)) root.append(h('p.note', null, t('rent.unknownHint')));
+  if (Object.values(D.ledger.people).some(p => p.hasUnmatchedCredit)) root.append(h('p.note', null, t('housing.unmatchedHint')));
   for (const [label, list] of [[t('res.living'), D.residents.filter(r => !r.moveOut || r.moveOut > D.today)], [t('res.movedOut'), D.residents.filter(r => r.moveOut && r.moveOut <= D.today)]]) {
     if (!list.length) continue;
     const people = h('div.people', null, list.map(r => {
@@ -61,7 +64,7 @@ export function render(root, ctx) {
       height: 220, tableLabel: t('viz.table'), xName: t('rent.receiptMonth') });
     chart.append(h('p.note', null, t('rent.receiptsNote'))); root.append(chart);
   }
-  const unclassified = Object.values(ctx.S.data.payments).filter(p => !p.deleted && p.purpose !== 'rent');
+  const unclassified = Object.values(ctx.S.data.payments).filter(p => !p.deleted && !isHousingPayment(p));
   if (unclassified.length) root.append(h('details.card', null, h('summary', null, t('rent.unclassified', { n: unclassified.length })),
     h('p.note', null, t('rent.unclassifiedHint')), unclassified.map(p => h('p.small', null, date(p.date), ' · ', money(p.amount), ' · ', p.note || '',
       h('button.link-btn', { type: 'button', onclick: () => { if (confirm(t('rent.classifyConfirm'))) ctx.put('payments', { ...p, purpose: 'rent' }); } }, t('rent.classify'))))));
