@@ -9,7 +9,7 @@ import { buildStatement } from '../core/statement.js';
 import { parseAmount } from '../ui/parse.js';
 import { residentName } from './parts.js';
 
-export const METHODS = ['zelle', 'venmo', 'cash', 'check', 'other'];
+export const METHODS = ['zelle', 'venmo', 'wechat', 'alipay', 'cash', 'check', 'other'];
 const lastMethod = (ctx, rid) => { const p = ctx.D.payments.find(x => x.residentId === rid && x.method); return p ? p.method : 'zelle'; };
 const rentPeople = ctx => ctx.D.residents.filter(r => !r.isOwner).sort((a, b) => Number(!!a.moveOut && a.moveOut <= ctx.D.today) - Number(!!b.moveOut && b.moveOut <= ctx.D.today) || b.moveIn.localeCompare(a.moveIn));
 

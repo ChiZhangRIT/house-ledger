@@ -41,7 +41,7 @@ const zh = {
   'usage.electricity': '用电', 'usage.gas': '用气', 'usage.water': '用水', 'usage.data': '流量',
   'usage.perDay.electricity': '日均用电', 'usage.perDay.gas': '日均用气', 'usage.perDay.water': '日均用水', 'usage.perDay.data': '日均流量', 'usage.perDayVal': '{v} {unit}/天',
   'rate.electricity': '电价（$/kWh）', 'rate.gas': '气价（$/therm）', 'rate.water': '水价（$/CCF）',
-  'method.zelle': 'Zelle', 'method.venmo': 'Venmo', 'method.cash': '现金', 'method.check': '支票', 'method.other': '其他',
+  'method.zelle': 'Zelle', 'method.venmo': 'Venmo', 'method.wechat': '微信支付', 'method.alipay': '支付宝', 'method.cash': '现金', 'method.check': '支票', 'method.other': '其他',
   // 账单
   'bills.filter': '筛选账单', 'bills.all': '全部', 'bills.year': '年份', 'bills.allYears': '所有年份', 'bills.none': '还没有账单。点「添加账单」，或在设置里导入历史数据。',
   'bills.noneFiltered': '没有符合条件的账单', 'bills.groupSum': '{n} 张 · {amount}', 'bills.byStatement': '按账单日期分组；金额是每张账单的本期新费用（不含上期余额）。',
@@ -201,7 +201,7 @@ const en = {
   'usage.electricity': 'Electricity', 'usage.gas': 'Gas', 'usage.water': 'Water', 'usage.data': 'Data',
   'usage.perDay.electricity': 'Electricity / day', 'usage.perDay.gas': 'Gas / day', 'usage.perDay.water': 'Water / day', 'usage.perDay.data': 'Data / day', 'usage.perDayVal': '{v} {unit}/day',
   'rate.electricity': 'Electricity ($/kWh)', 'rate.gas': 'Gas ($/therm)', 'rate.water': 'Water ($/CCF)',
-  'method.zelle': 'Zelle', 'method.venmo': 'Venmo', 'method.cash': 'Cash', 'method.check': 'Check', 'method.other': 'Other',
+  'method.zelle': 'Zelle', 'method.venmo': 'Venmo', 'method.wechat': 'WeChat Pay', 'method.alipay': 'Alipay', 'method.cash': 'Cash', 'method.check': 'Check', 'method.other': 'Other',
   'bills.filter': 'Filter bills', 'bills.all': 'All', 'bills.year': 'Year', 'bills.allYears': 'All years', 'bills.none': 'No bills yet. Tap “Add bill”, or import history in Settings.',
   'bills.noneFiltered': 'No matching bills', 'bills.groupSum': (v, f) => `${v.n} ${plural(v.n, 'bill', 'bills')} · ${f.money(v.amount)}`, 'bills.byStatement': 'Grouped by statement date; amounts are new charges (excluding previous balance).',
   'bill.days': (v) => `${v.n} ${plural(v.n, 'day', 'days')}`, 'bill.perDay': '{amount}/day', 'bill.locked': 'Locked', 'bill.lockedHint': 'Shares are fixed (e.g. from the old spreadsheet) and won’t change with resident settings',
