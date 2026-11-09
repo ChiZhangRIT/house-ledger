@@ -760,6 +760,7 @@ Object.assign(en, {
 
 Object.assign(zh, {
   'income.title': '房租收款总览', 'income.subtitle': '按实际到账月份 · USD · 点击月份查看明细',
+  'income.view': '房租收款视图', 'income.list': '月份清单', 'income.calendar': '年度月历', 'income.scale': '净收款：少 → 多',
   'income.year': '收款年份', 'income.yearLabel': '{year} 年', 'income.annualTotal': '已记录净收款 {amount}',
   'income.netTotal': '已知净收款 {amount}', 'income.noRecord': '无收款记录', 'income.future': '未到',
   'income.offset': '收退相抵', 'income.zeroRecorded': '零金额记录', 'income.netRefund': '净退款',
@@ -770,6 +771,7 @@ Object.assign(zh, {
 });
 Object.assign(en, {
   'income.title': 'Rent receipts overview', 'income.subtitle': 'By actual receipt month · USD · Select a month for details',
+  'income.view': 'Rent receipts view', 'income.list': 'Monthly list', 'income.calendar': 'Annual calendar', 'income.scale': 'Net receipts: lower → higher',
   'income.year': 'Receipt year', 'income.yearLabel': '{year}', 'income.annualTotal': 'Recorded net receipts {amount}',
   'income.netTotal': 'Known net receipts {amount}', 'income.noRecord': 'No records', 'income.future': 'Upcoming',
   'income.offset': 'Receipts offset refunds', 'income.zeroRecorded': 'Zero-amount entries', 'income.netRefund': 'Net refund',

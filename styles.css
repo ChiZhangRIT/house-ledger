@@ -357,7 +357,8 @@ details.card summary { cursor: pointer; font-weight: 600; }
 
 /* ---------- 图表 ---------- */
 .chart-card { padding-bottom: 12px; }
-.rent-income > .section-h { margin-bottom: 4px; }
+.income-heading { justify-content: space-between; margin-bottom: 4px; }
+.income-heading .section-h { margin-bottom: 0; }
 .rent-income > p { margin-top: 0; }
 .income-controls { margin: 16px 0 8px; }
 .income-controls select { max-width: 100%; }
@@ -377,6 +378,29 @@ details.card summary { cursor: pointer; font-weight: 600; }
 .income-transaction > div { min-width: 0; overflow-wrap: anywhere; }
 .income-undated { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 16px; }
 .rent-income > .note { margin-top: 14px; }
+.income-year { margin-top: 18px; }
+.income-year-heading { margin-bottom: 8px; }
+.income-year-heading h3 { font-size: 15.5px; }
+.income-calendar { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px; }
+.income-tile { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 5px; min-width: 0; min-height: 80px; padding: 8px 2px; border: 0; border-radius: var(--radius-s); background: var(--surface-2); color: var(--ink); cursor: pointer; }
+.income-tile > span:first-child { font-size: 13px; }
+.income-tile .income-amount { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.income-tile-note { font-size: 12px; }
+.income-tile.positive { background: color-mix(in srgb, var(--accent) var(--income-level), var(--surface)); }
+.income-tile.strong { color: var(--accent-ink); }
+.income-tile.refund, .income-swatch.refund { background: var(--warning-soft); }
+.income-tile.offset, .income-swatch.offset { background: repeating-linear-gradient(135deg, var(--surface-2) 0 5px, var(--surface) 5px 10px); }
+.income-tile.on { outline: 2px solid var(--accent); outline-offset: 2px; }
+.income-tile:disabled { background: none; color: var(--ink-3); cursor: default; }
+.income-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 16px; color: var(--ink-2); font-size: 12px; }
+.income-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.income-swatch { width: 13px; height: 13px; border-radius: 3px; background: var(--surface-2); }
+.income-scale { width: 48px; height: 13px; border-radius: 3px; background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 25%, var(--surface)) 0 33%, color-mix(in srgb, var(--accent) 50%, var(--surface)) 33% 67%, var(--accent) 67%); }
+@media (max-width: 1399px) { .income-calendar { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+@media (max-width: 899px) { .income-calendar { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 719px) {
+  .income-heading .seg-tab { min-height: 44px; }
+}
 @media (max-width: 480px) {
   .income-month { grid-template-columns: 34px minmax(0, 1fr) minmax(96px, max-content) 10px; gap: 8px; padding: 10px 2px; }
 }
