@@ -20,9 +20,15 @@ export function openPayment(ctx, { residentId, amount, rentId, payment, refund =
   let rid = payment?.residentId || residentId || people[0]?.id, selected = payment?.rentId || rentId || '';
   let rows = [], chosen;
   const initialAmount = payment?.amount ?? amount ?? null;
-  const f = { amount: initialAmount == null ? null : Math.abs(initialAmount), refund: initialAmount < 0 || refund, date: payment ? payment.date || '' : ctx.D.today, method: payment ? (payment.method || 'other') : lastMethod(ctx, rid), note: payment?.note || '' };
+  const f = { amount: initialAmount == null ? null : Math.abs(initialAmount), refund: initialAmount < 0 || refund, date: payment ? payment.date || '' : ctx.D.today,
+    dateUnavailable: payment?.dateUnavailable === true, method: payment ? (payment.method || 'other') : lastMethod(ctx, rid), note: payment?.note || '' };
   const prevEl = h('p.note'), datesEl = h('p'), quick = h('div.chips');
   const amountLabel = h('span.field-label'), dateLabel = h('span.field-label');
+  const dateInput = h('input', { type: 'date', value: f.dateUnavailable ? '' : f.date, disabled: f.dateUnavailable, oninput: e => { f.date = e.target.value; } });
+  const dateHint = h('p.note', { hidden: !f.dateUnavailable }, t('rent.dateUnavailableHint'));
+  const dateOption = h('label.check-line', null, h('input', { type: 'checkbox', checked: f.dateUnavailable, onchange: e => {
+    f.dateUnavailable = e.target.checked; dateInput.disabled = f.dateUnavailable; dateInput.value = f.dateUnavailable ? '' : f.date; dateHint.hidden = !f.dateUnavailable;
+  } }), h('span', null, t('rent.dateUnavailableOption')));
   const amtIn = h('input.big-amt', { inputmode: 'decimal', value: f.amount ?? '', oninput: e => { f.amount = parseAmount(e.target.value); preview(); } });
   const preview = () => {
     amountLabel.textContent = t(f.refund ? 'rent.refundAmount' : 'rent.receivedAmount');
@@ -61,7 +67,8 @@ export function openPayment(ctx, { residentId, amount, rentId, payment, refund =
   const save = () => {
     const incomplete = payment && (payment.embeddedRentId || payment.confirmationOnly) && f.amount == null && !f.refund;
     if ((!incomplete && (!Number.isFinite(f.amount) || f.amount < 0 || (f.amount === 0 && !payment) || f.amount > 1e7)) || !rid) { amtIn.focus(); return; }
-    if (f.date && !isISODate(f.date)) { prevEl.hidden = false; prevEl.textContent = t('rent.historyError.date'); return; }
+    const receiptDate = f.dateUnavailable ? '' : f.date;
+    if (receiptDate && !isISODate(receiptDate)) { prevEl.hidden = false; prevEl.textContent = t('rent.historyError.date'); return; }
     const current = payment && (payment.embeddedRentId ? ctx.S.data.rents[payment.embeddedRentId] : ctx.S.data.payments[payment.id]);
     if (current && current.updatedAt !== payment.updatedAt && !confirm(t(current.deleted ? 'form.deletedElsewhere' : 'form.changedElsewhere'))) return;
     let rec;
@@ -69,7 +76,8 @@ export function openPayment(ctx, { residentId, amount, rentId, payment, refund =
       const changes = payment ? rentReceiptChanges(ctx.S, payment) : { receipt: {}, rent: null };
       if (changes.rent) ctx.put('rents', changes.rent);
       if (chosen && !ctx.S.data.rents[chosen.id]) ctx.put('rents', chosen);
-      rec = ctx.put('payments', { ...changes.receipt, deleted: undefined, deletedAt: undefined, id: payment?.id || 'pay_' + newId(), purpose: 'rent', residentId: rid, rentId: chosen?.id || null, date: f.date, amount: incomplete ? null : f.amount * (f.refund ? -1 : 1), confirmationOnly: incomplete || undefined, method: f.method, note: f.note });
+      rec = ctx.put('payments', { ...changes.receipt, deleted: undefined, deletedAt: undefined, id: payment?.id || 'pay_' + newId(), purpose: 'rent', residentId: rid, rentId: chosen?.id || null,
+        date: receiptDate, dateUnavailable: f.dateUnavailable || undefined, amount: incomplete ? null : f.amount * (f.refund ? -1 : 1), confirmationOnly: incomplete || undefined, method: f.method, note: f.note });
     });
     sheet.close(); onSave?.(rec);
     ctx.toast(rec.amount == null ? t('res.saved') : t('pay.saved', { amount: rec.amount, name: residentName(ctx, rid) }), { action: t('undo'), onAction: () => {
@@ -85,7 +93,7 @@ export function openPayment(ctx, { residentId, amount, rentId, payment, refund =
         ['receipt', 'refund'].map(k => h('option', { value: k, selected: f.refund === (k === 'refund') }, t('rent.' + k))))),
       h('label.field', null, amountLabel, amtIn, h('span.hint', null, t('rent.refundHint'))), quick,
       h('div.field-row', null,
-        h('label.field', null, dateLabel, h('input', { type: 'date', value: f.date, oninput: e => { f.date = e.target.value; } })),
+        h('div.field', null, h('label.field', null, dateLabel, dateInput), dateOption, dateHint),
         h('div.field', null, h('span.field-label', null, t('pay.method')), methods)),
       h('label.field', null, h('span.field-label', null, t('form.note')), h('input', { value: f.note, placeholder: t('pay.notePh'), oninput: e => { f.note = e.target.value; } })),
       prevEl, h('p.note', null, t('rent.assignmentHint')), h('button', { type: 'submit', hidden: true })),

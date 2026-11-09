@@ -106,7 +106,7 @@ export function rentPeriodSummary(state, period) {
   const net = unknown ? null : (received - refunded) / 100;
   return { receipts, adjustments, extra: extra / 100, received: received / 100, refunded: refunded / 100, expected, net,
     remaining: expected == null || net == null ? null : Math.round((expected - net) * 100) / 100,
-    incomplete: !completeRentDates(period) || expected == null || unknown || receipts.some(x => !isISODate(x.date)) };
+    incomplete: !completeRentDates(period) || expected == null || unknown || receipts.some(x => !isISODate(x.date) && x.dateUnavailable !== true) };
 }
 export function rentReceipts(state) {
   const payments = rentPayments(state).filter(p => Number.isFinite(p.amount) && isISODate(p.date) && state.data.residents[p.residentId] && !state.data.residents[p.residentId].deleted && !state.data.residents[p.residentId].isOwner);

@@ -182,3 +182,46 @@ test('删除待确认行连同本行收支可恢复，不误删相邻自动租�
   assert.equal(rentPeriodsFor(synced, 'r', '2023-03-01').some(x => x.id === auto.id), false);
   assert.equal(rentPayments(synced).filter(x => x.rentId === 'old' && x.residentId === 'r').length, 3);
 });
+
+test('明确选择日期无法查证后可结清，旧收款转换及备份同步恢复保留选择，不推算收入月份', () => {
+  const s = fixture(); s.data.residents.r.rentTrackingStart = null;
+  s.data.rents.p = { id: 'p', residentId: 'r', history: false, datesConfirmed: true,
+    periodStart: '2022-10-01', periodEnd: '2022-10-15', dueDate: '2022-09-15', amount: 850,
+    paid: true, receivedAmount: 850, paidDate: null, note: '原有备注' };
+  assert.equal(rentPeriodSummary(s, s.data.rents.p).incomplete, true);
+  const changes = rentReceiptChanges(s, rentPayments(s)[0]);
+  s.data.rents.p = changes.rent;
+  s.data.payments[changes.receipt.id] = { ...changes.receipt, dateUnavailable: true, updatedAt: 100 };
+  const reloaded = normalizeState(JSON.parse(JSON.stringify(mergeStates(s, blankState()))));
+  const summary = rentPeriodSummary(reloaded, reloaded.data.rents.p);
+  assert.deepEqual([summary.net, summary.remaining, summary.incomplete], [850, 0, false]);
+  assert.equal(rentRecordSummary(reloaded, 'r').missing.length, 0);
+  assert.equal(buildRentLedger(reloaded, '2023-03-01').people.r.outstanding, 0);
+  assert.deepEqual(rentReceipts(reloaded).months, []);
+  assert.equal(reloaded.data.rents.p.note, '原有备注');
+  const removed = deletedRecord(reloaded.data.payments['receipt:p'], 200);
+  const restored = restoredRecord('payments', removed, null, 300);
+  assert.equal(restored.dateUnavailable, true);
+  assert.equal(restored.date, '');
+  assert.equal(restored.amount, 850);
+});
+
+test('日期无法查证适用于退款，但不掩盖未知金额或租期；补上真实日期后计入收入月份', () => {
+  const s = fixture(); s.data.residents.r.rentTrackingStart = null;
+  const period = s.data.rents.p = { id: 'p', residentId: 'r', history: false, datesConfirmed: true,
+    periodStart: '2022-10-16', periodEnd: '2022-11-15', dueDate: '2022-10-15', amount: 900 };
+  s.data.payments.receipt = { id: 'receipt', residentId: 'r', purpose: 'rent', rentId: 'p', amount: 1000, date: '2022-10-15' };
+  s.data.payments.refund = { id: 'refund', residentId: 'r', purpose: 'rent', rentId: 'p', amount: -100, date: '', dateUnavailable: true };
+  assert.equal(rentPeriodSummary(s, period).incomplete, false);
+  assert.deepEqual(rentReceipts(s).values, [1000]);
+  assert.equal(rentPeriodSummary(s, { ...period, amount: null }).incomplete, true);
+  assert.equal(rentPeriodSummary(s, { ...period, periodEnd: null }).incomplete, true);
+  s.data.payments.refund.amount = null; s.data.payments.refund.confirmationOnly = true;
+  assert.equal(rentPeriodSummary(s, period).incomplete, true);
+  s.data.payments.refund.amount = -100; delete s.data.payments.refund.confirmationOnly;
+  delete s.data.payments.refund.dateUnavailable;
+  assert.equal(rentPeriodSummary(s, period).incomplete, true);
+  s.data.payments.refund.date = '2022-10-20';
+  assert.equal(rentPeriodSummary(s, period).incomplete, false);
+  assert.deepEqual(rentReceipts(s).values, [900]);
+});

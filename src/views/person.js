@@ -29,7 +29,7 @@ export function render(root, ctx, [id]) {
   const transactions = payments => {
     const sorted = [...payments].sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
     return [h('td.rent-receipt-dates', null, sorted.length ? sorted.map(payment => h('div.rent-receipt-line', null,
-      payment.amount < 0 ? t('rent.refund') + ' · ' : '', payment.date ? date(payment.date, 'iso') : t('rent.receiptDatePending'))) : '—'),
+      payment.amount < 0 ? t('rent.refund') + ' · ' : '', payment.date ? date(payment.date, 'iso') : t(payment.dateUnavailable === true ? 'rent.dateUnavailable' : 'rent.receiptDatePending'))) : '—'),
     h('td', null, sorted.length ? sorted.map(payment => h('div.rent-receipt-line', null,
       payment.method ? t('method.' + payment.method) : t('rent.methodPending'))) : '—')];
   };

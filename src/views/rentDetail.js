@@ -30,7 +30,7 @@ export function openRentDetail(ctx, residentId, record) {
     const receipts = h('div.rent-transactions');
     for (const payment of [...summary.receipts].sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id))) {
       receipts.append(h('div.rent-transaction', null,
-        h('div', null, h('div', null, payment.date ? date(payment.date, 'iso') : t('rent.receiptDatePending'), ' · ', t(payment.amount < 0 ? 'rent.refund' : 'rent.receipt')),
+        h('div', null, h('div', null, payment.date ? date(payment.date, 'iso') : t(payment.dateUnavailable === true ? 'rent.dateUnavailable' : 'rent.receiptDatePending'), ' · ', t(payment.amount < 0 ? 'rent.refund' : 'rent.receipt')),
           h('div.small.muted', null, payment.method ? t('method.' + payment.method) : t('rent.methodPending'), payment.note ? ' · ' + payment.note : '')),
         h('span.num', null, payment.amount == null ? t('rent.amountMissing') : money(payment.amount)),
         h('button.link-btn', { type: 'button', onclick: () => openPayment(ctx, { residentId, payment, onSave: draw }) }, t('bill.edit'))));
