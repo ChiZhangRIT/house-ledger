@@ -126,10 +126,25 @@ export function rentPeriodSummary(state, period) {
     incomplete: !completeRentDates(period) || expected == null || unknown || receipts.some(x => !isISODate(x.date) && x.dateUnavailable !== true) };
 }
 export function rentReceipts(state) {
-  const payments = rentPayments(state).filter(p => Number.isFinite(p.amount) && isISODate(p.date) && state.data.residents[p.residentId] && !state.data.residents[p.residentId].deleted && !state.data.residents[p.residentId].isOwner);
+  const eligible = rentPayments(state).filter(p => state.data.residents[p.residentId] && !state.data.residents[p.residentId].deleted && !state.data.residents[p.residentId].isOwner);
+  const payments = eligible.filter(p => Number.isFinite(p.amount) && isISODate(p.date));
   const dates = payments.map(p => p.date.slice(0, 7)).sort();
   const months = dates.length ? monthRange(dates[0], dates.at(-1)) : [];
-  return { months, values: months.map(k => Math.round(payments.filter(p => p.date.startsWith(k)).reduce((s, p) => s + p.amount, 0) * 100) / 100), payments };
+  return { months, values: months.map(k => Math.round(payments.filter(p => p.date.startsWith(k)).reduce((s, p) => s + p.amount, 0) * 100) / 100), payments,
+    undated: eligible.filter(p => !isISODate(p.date)), unknownAmounts: eligible.filter(p => isISODate(p.date) && !Number.isFinite(p.amount)) };
+}
+/** 按实际到账月份汇总房租部分；未知金额保留在明细，不当作零元收款。 */
+export function rentReceiptYear(receipts, year) {
+  const dated = [...receipts.payments, ...receipts.unknownAmounts];
+  const months = Array.from({ length: 12 }, (_, i) => {
+    const key = year + '-' + String(i + 1).padStart(2, '0');
+    const payments = dated.filter(p => p.date.startsWith(key));
+    const received = payments.filter(p => p.amount > 0).reduce((sum, p) => sum + Math.round(p.amount * 100), 0);
+    const refunded = payments.filter(p => p.amount < 0).reduce((sum, p) => sum - Math.round(p.amount * 100), 0);
+    return { key, payments, received: received / 100, refunded: refunded / 100, net: (received - refunded) / 100,
+      incomplete: payments.some(p => !Number.isFinite(p.amount)) };
+  });
+  return { months, net: months.reduce((sum, m) => sum + Math.round(m.net * 100), 0) / 100 };
 }
 export function rentRecordSummary(state, residentId) {
   const records = Object.values(state.data.rents).filter(r => {

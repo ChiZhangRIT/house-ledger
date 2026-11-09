@@ -758,4 +758,26 @@ Object.assign(en, {
   'deposit.receipt': 'Deposit receipt', 'deposit.refund': 'Deposit refund',
 });
 
+Object.assign(zh, {
+  'income.title': '房租收款总览', 'income.subtitle': '按实际到账月份 · USD · 点击月份查看明细',
+  'income.year': '收款年份', 'income.yearLabel': '{year} 年', 'income.annualTotal': '已记录净收款 {amount}',
+  'income.netTotal': '已知净收款 {amount}', 'income.noRecord': '无收款记录', 'income.future': '未到',
+  'income.offset': '收退相抵', 'income.zeroRecorded': '零金额记录', 'income.netRefund': '净退款',
+  'income.emptyHint': '该月没有已记录的房租收支，不能据此判断是否空置。',
+  'income.incompleteHint': '本月仍有金额待补，仅合计已知金额。',
+  'income.undated': '无法按月份归类 · {n} 条', 'income.undatedHint': '这些记录的到账日期未知，不归入任何月份，也不计入年度合计。',
+  'income.note': '仅统计房租收款减房租退款，押金及退押金另计；未知金额不计入合计。无收款记录不代表空置。',
+});
+Object.assign(en, {
+  'income.title': 'Rent receipts overview', 'income.subtitle': 'By actual receipt month · USD · Select a month for details',
+  'income.year': 'Receipt year', 'income.yearLabel': '{year}', 'income.annualTotal': 'Recorded net receipts {amount}',
+  'income.netTotal': 'Known net receipts {amount}', 'income.noRecord': 'No records', 'income.future': 'Upcoming',
+  'income.offset': 'Receipts offset refunds', 'income.zeroRecorded': 'Zero-amount entries', 'income.netRefund': 'Net refund',
+  'income.emptyHint': 'No rent transactions are recorded for this month. This does not establish whether the property was vacant.',
+  'income.incompleteHint': 'Some amounts for this month are unknown. Totals include known amounts only.',
+  'income.undated': ({ n }) => `Unassigned receipt dates · ${n} ${n === 1 ? 'entry' : 'entries'}`,
+  'income.undatedHint': 'These receipt dates are unknown. The entries are excluded from monthly and annual totals.',
+  'income.note': 'Rent receipts less rent refunds only. Deposits and deposit returns are separate; unknown amounts are excluded from totals. A month without records is not necessarily vacant.',
+});
+
 export const STRINGS = { 'zh-Hans': zh, en };

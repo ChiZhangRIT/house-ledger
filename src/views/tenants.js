@@ -1,9 +1,8 @@
 // 房东自用的住户与房租首页。
 import { h } from '../ui/dom.js';
-import { t, money, date } from '../i18n.js';
+import { t, money, date, month } from '../i18n.js';
 import { rentOn } from '../core/ledger.js';
-import { rentReceipts, rentRecordSummary } from '../core/rent.js';
-import { columnChart } from '../ui/charts.js';
+import { rentReceipts, rentReceiptYear, rentRecordSummary } from '../core/rent.js';
 import { avatar, statusChip } from './parts.js';
 import { openResident } from './residents.js';
 import { openPayment } from './money.js';
@@ -56,16 +55,62 @@ export function render(root, ctx) {
       return h('a.person', { href: '#/person/' + encodeURIComponent(r.id) }, avatar(r), h('span.person-name', null, r.name),
         h('span.small.muted', null, t('rent.missingMonths', { n: records.length })), h('span.person-amt', null, t('rent.completeHistory') + ' ›'));
     }))));
-  if (receipts.months.length) {
-    const chart = h('section.card.chart-card');
-    columnChart(chart, { title: t('rent.receiptsChart'), labels: receipts.months.map(k => k.replace('-', '/')),
-      series: [{ key: 'rent', name: t('rent.receipts'), color: 'var(--accent)', values: receipts.values }], visibleCount: 12,
-      format: v => money(v), tickFormat: v => money(v, { whole: v === 0 || Math.abs(v) >= 10 }),
-      height: 220, tableLabel: t('viz.table'), xName: t('rent.receiptMonth') });
-    chart.append(h('p.note', null, t('rent.receiptsNote'))); root.append(chart);
-  }
+  if (tenants.length) root.append(rentIncome(ctx, receipts));
   const unclassified = Object.values(ctx.S.data.payments).filter(p => !p.deleted && !isHousingPayment(p));
   if (unclassified.length) root.append(h('details.card', null, h('summary', null, t('rent.unclassified', { n: unclassified.length })),
     h('p.note', null, t('rent.unclassifiedHint')), unclassified.map(p => h('p.small', null, date(p.date), ' · ', money(p.amount), ' · ', p.note || '',
       h('button.link-btn', { type: 'button', onclick: () => { if (confirm(t('rent.classifyConfirm'))) ctx.put('payments', { ...p, purpose: 'rent' }); } }, t('rent.classify'))))));
+}
+
+function rentIncome(ctx, receipts) {
+  const currentMonth = ctx.D.today.slice(0, 7), currentYear = Number(currentMonth.slice(0, 4));
+  const dated = [...receipts.payments, ...receipts.unknownAmounts];
+  const years = dated.map(p => Number(p.date.slice(0, 4))).concat(currentYear);
+  const options = Array.from({ length: Math.max(...years) - Math.min(...years) + 1 }, (_, i) => Math.max(...years) - i);
+  const maximum = Math.max(1, ...options.flatMap(y => rentReceiptYear(receipts, y).months.map(m => Math.abs(m.net))));
+  let year = currentYear, selected = null;
+  const select = h('select', { 'aria-label': t('income.year'), onchange: () => { year = Number(select.value); selected = null; draw(); } },
+    options.map(y => h('option', { value: y, selected: y === year }, t('income.yearLabel', { year: y }))));
+  const total = h('span.small.muted.num'), rows = h('div.income-months');
+  const detail = h('div.income-detail', { id: 'rent-income-detail', hidden: true, 'aria-live': 'polite' });
+  const transaction = p => h('div.income-transaction', null,
+    h('div', null, h('a', { href: '#/person/' + encodeURIComponent(p.residentId) }, ctx.S.data.residents[p.residentId].name),
+      h('div.small.muted', null, p.date ? date(p.date, 'iso') : t(p.dateUnavailable ? 'rent.dateUnavailable' : 'rent.receiptDatePending'),
+        ' · ', t(p.amount < 0 ? 'rent.refund' : 'rent.receipt'), ' · ', p.method ? t('method.' + p.method) : t('rent.methodPending'))),
+    h('span.num', null, Number.isFinite(p.amount) ? money(p.amount) : t('rent.amountMissing')));
+  function draw() {
+    const annual = rentReceiptYear(receipts, year);
+    total.textContent = t('income.annualTotal', { amount: annual.net });
+    rows.replaceChildren(...annual.months.map(m => {
+      const future = m.key > currentMonth && !m.payments.length;
+      const label = future ? t('income.future') : m.incomplete ? t('rent.amountMissing') : !m.payments.length ? t('income.noRecord') :
+        m.net === 0 ? t(m.received > 0 ? 'income.offset' : 'income.zeroRecorded') : m.net < 0 ? t('income.netRefund') : '';
+      const value = future ? '—' : m.incomplete && !m.payments.some(p => Number.isFinite(p.amount)) ? '—' : money(m.net);
+      return h('button.income-month' + (selected === m.key ? '.on' : ''), { type: 'button', disabled: future,
+        'aria-pressed': String(selected === m.key), 'aria-controls': 'rent-income-detail',
+        'aria-label': month(m.key) + ' · ' + value + (label ? ' · ' + label : ''), onclick: () => {
+          selected = m.key; draw(); rows.querySelector('.on').focus({ preventScroll: true }); detail.scrollIntoView({ block: 'nearest' });
+        } },
+        h('span', null, month(m.key, 'short')),
+        label ? h('span.income-month-note', null, label) : h('span.income-track', { 'aria-hidden': 'true' },
+          h('span.income-bar', { style: { width: Math.abs(m.net) / maximum * 100 + '%' } })),
+        h('span.income-amount.num', null, value), h('span.income-chevron', { 'aria-hidden': 'true' }, future ? '' : '›'));
+    }));
+    const m = annual.months.find(m => m.key === selected);
+    detail.hidden = !m;
+    if (m) {
+      const content = [h('div.row', null, h('h3', null, month(m.key)), h('span.sp'), h('span.num', null, t('income.netTotal', { amount: m.net })))];
+      if (m.payments.length) content.push(h('p.small.muted', null, t('rent.receiptsBreakdown', { paid: m.received, amount: m.refunded })));
+      if (m.incomplete) content.push(h('p.note', null, t('income.incompleteHint')));
+      content.push(...(m.payments.length ? [...m.payments].sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id)).map(transaction) : [h('p.small.muted', null, t('income.emptyHint'))]));
+      detail.replaceChildren(...content);
+    }
+  }
+  const card = h('section.card.rent-income', null, h('h2.section-h', null, t('income.title')),
+    h('p.small.muted', null, t('income.subtitle')),
+    h('div.row.income-controls', null, select, h('span.sp'), total), rows, detail);
+  if (receipts.undated.length) card.append(h('details.income-undated', null, h('summary', null, t('income.undated', { n: receipts.undated.length })),
+    h('p.note', null, t('income.undatedHint')), receipts.undated.map(transaction)));
+  card.append(h('p.note', null, t('income.note')));
+  draw(); return card;
 }
