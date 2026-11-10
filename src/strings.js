@@ -783,4 +783,23 @@ Object.assign(en, {
   'income.note': 'Rent receipts less rent refunds only. Deposits and deposit returns are separate; unknown amounts are excluded from totals. A month without records is not necessarily vacant.',
 });
 
+Object.assign(zh, {
+  'viz.axisAuto': '纵轴 · 自动', 'viz.axisCustom': '纵轴 · 自定义', 'viz.axisTitle': '调整纵轴范围',
+  'viz.axisMin': '下限', 'viz.axisMax': '上限', 'viz.axisApply': '应用', 'viz.axisReset': '恢复自动',
+  'viz.axisHint': '按图表标题中的单位填写。超出范围的数据会用箭头标出，原始数值仍可通过提示框或表格查看。',
+  'viz.axisInvalid': '请填写有效数字，且上限必须大于下限。',
+  'viz.axisRange': '自定义纵轴：{from} 至 {to}。',
+  'viz.axisNonzero': '纵轴未从 0 开始，请按数值比较。',
+  'viz.axisClipped': '{n} 组数据超出范围，箭头标示截断方向。',
+});
+Object.assign(en, {
+  'viz.axisAuto': 'Y-axis · Auto', 'viz.axisCustom': 'Y-axis · Custom', 'viz.axisTitle': 'Adjust Y-axis range',
+  'viz.axisMin': 'Minimum', 'viz.axisMax': 'Maximum', 'viz.axisApply': 'Apply', 'viz.axisReset': 'Reset to auto',
+  'viz.axisHint': 'Use the units in the chart title. Arrows mark values outside the range; tooltips and the table retain the original values.',
+  'viz.axisInvalid': 'Enter valid numbers. The maximum must be greater than the minimum.',
+  'viz.axisRange': 'Custom Y-axis: {from} to {to}.',
+  'viz.axisNonzero': 'The axis does not start at 0; compare the values.',
+  'viz.axisClipped': 'Out-of-range groups: {n}. Arrows mark the clipping direction.',
+});
+
 export const STRINGS = { 'zh-Hans': zh, 'zh-Hant-TW': zhTW, en };

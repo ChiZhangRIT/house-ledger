@@ -3,8 +3,12 @@
 // 折线 2px，末端圆点 r=4 带 2px 底色描边；网格和坐标轴是一像素的实线细线；
 // 两个以上系列一定有图例；悬停/键盘聚焦时一个提示框列出该位置的所有系列；每张图都能切换成表格。
 // 所有名称都用 textContent 写入，不拼 HTML。
+import { h, openSheet } from './dom.js';
+import { t } from '../i18n.js';
 
 const NS = 'http://www.w3.org/2000/svg';
+let plotId = 0;
+const axisNumber = new Intl.NumberFormat('en-US', { maximumFractionDigits: 8 });
 const svgEl = (tag, attrs = {}, parent) => {
   const el = document.createElementNS(NS, tag);
   for (const [k, v] of Object.entries(attrs)) if (v != null) el.setAttribute(k, v);
@@ -20,12 +24,31 @@ const htmlEl = (tag, cls, parent, text) => {
 };
 
 /** 纵轴范围：小小的负数（比如一个月的气候补贴）不把轴拉到下一整格，最低刻度停在 0，柱子略微伸出去 */
-export function axisDomain(min, max, count = 4) {
+export function axisDomain(min, max, count = 4, limits = null) {
+  if (limits) {
+    const { min: y0, max: y1 } = limits;
+    let ticks = Array.from({ length: count + 1 }, (_, i) => i === count ? y1 : y0 + (y1 - y0) * (i / count));
+    // 正负值共用一张图时保留 0 基线，临近 0 的标签让位，避免重叠。
+    if (y0 < 0 && y1 > 0 && !ticks.includes(0)) ticks = [...ticks.filter(v => Math.abs(v) > (y1 - y0) / count * 0.4), 0].sort((a, b) => a - b);
+    return { ticks, y0, y1 };
+  }
   let ticks = niceTicks(min, max, count);
   const step = ticks[1] - ticks[0];
   let y0 = ticks[0];
   if (min < 0 && ticks[0] < min - step * 0.5) { y0 = min - step * 0.08; ticks = ticks.filter(v => v >= y0); }
   return { ticks, y0, y1: ticks[ticks.length - 1] };
+}
+
+/** 每组柱子的实际端点：堆叠时正负分别相加，空缺不当作 0。 */
+export function columnBounds(series, stacked = false) {
+  return Array.from({ length: Math.max(0, ...series.map(s => s.values.length)) }, (_, i) => {
+    const values = series.map(s => s.values[i]).filter(Number.isFinite);
+    if (!values.length) return null;
+    if (!stacked) return { min: Math.min(...values), max: Math.max(...values) };
+    const pos = values.filter(v => v > 0).reduce((a, v) => a + v, 0);
+    const neg = values.filter(v => v < 0).reduce((a, v) => a + v, 0);
+    return { min: neg < 0 ? neg : pos, max: pos > 0 ? pos : neg };
+  });
 }
 
 /** 刻度：取「好看」的整数间隔（1、2、2.5、5 × 10^n） */
@@ -69,7 +92,35 @@ function frame(container, opts, drawPlot, legendKind) {
   container.classList.add('viz');
   const head = htmlEl('div', 'viz-head', container);
   if (opts.title) htmlEl('div', 'viz-title', head, opts.title);
-  const toggle = htmlEl('button', 'viz-toggle', head, opts.tableLabel || 'Table');
+  const actions = htmlEl('div', 'viz-actions', head);
+  let limits = null, domain = null;
+  const scale = legendKind === 'bar' ? htmlEl('button', 'viz-toggle', actions, t('viz.axisAuto')) : null;
+  if (scale) {
+    scale.type = 'button';
+    scale.setAttribute('aria-haspopup', 'dialog');
+    scale.onclick = () => {
+      const min = h('input', { type: 'number', step: 'any', value: domain.y0, required: true });
+      const max = h('input', { type: 'number', step: 'any', value: domain.y1, required: true });
+      const err = h('p.err', { hidden: true, role: 'alert' });
+      const field = (label, input) => h('label.field', null, h('span.field-label', null, label), input);
+      const set = next => { limits = next; draw(true); sheet.close(); };
+      const sheet = openSheet({ title: t('viz.axisTitle'), body: h('div.form', null,
+        h('p', null, opts.title || ''),
+        h('div.field-row', null, field(t('viz.axisMin'), min), field(t('viz.axisMax'), max)),
+        h('p.note', null, t('viz.axisHint')), err),
+        foot: [h('button.btn.axis-reset', { type: 'button', onclick: () => set(null) }, t('viz.axisReset')),
+          h('button.btn', { type: 'button', onclick: () => sheet.close() }, t('cancel')),
+          h('button.btn.primary', { type: 'button', onclick: () => {
+            const lo = min.valueAsNumber, hi = max.valueAsNumber;
+            if (!Number.isFinite(lo) || !Number.isFinite(hi) || !(hi > lo) || !Number.isFinite(hi - lo)) {
+              err.textContent = t('viz.axisInvalid'); err.hidden = false; return;
+            }
+            set({ min: lo, max: hi });
+          } }, t('viz.axisApply'))] });
+      sheet.el.classList.add('axis-sheet');
+    };
+  }
+  const toggle = htmlEl('button', 'viz-toggle', actions, opts.tableLabel || 'Table');
   toggle.type = 'button';
   toggle.setAttribute('aria-pressed', 'false');
   const shown = opts.series.filter(s => !s.hideInLegend);
@@ -83,23 +134,33 @@ function frame(container, opts, drawPlot, legendKind) {
   }
   const plot = htmlEl('div', 'viz-plot', container);
   if (opts.visibleCount) plot.classList.add('viz-scroll');
+  const scaleNote = scale ? htmlEl('p', 'note viz-scale-note', container) : null;
+  if (scaleNote) scaleNote.hidden = true;
   const table = htmlEl('div', 'viz-table', container);
   table.hidden = true;
   toggle.onclick = () => {
     const on = table.hidden;
     table.hidden = !on; plot.hidden = on;
+    if (scale) { scale.disabled = on; scaleNote.hidden = on || !limits; }
     toggle.setAttribute('aria-pressed', String(on));
     if (on) renderTable(table, opts);
   };
   let lastW = 0;
-  const draw = () => {
+  const draw = (force = false) => {
     const w = plot.clientWidth || container.clientWidth || 600;
-    if (w === lastW) return;
+    if (w === lastW && !force) return;
     lastW = w;
-    const count = Math.max(1, Math.min(opts.labels.length, opts.visibleCount || opts.labels.length));
-    const width = opts.visibleCount ? (w - PAD.left - PAD.right) * opts.labels.length / count + PAD.left + PAD.right : w;
-    drawPlot(plot, width);
-    if (opts.visibleCount) plot.scrollLeft = plot.scrollWidth;
+    const scroll = plot.scrollLeft;
+    if (force) hideTip();
+    domain = drawPlot(plot, w, limits);
+    if (scale) {
+      scale.textContent = t(limits ? 'viz.axisCustom' : 'viz.axisAuto');
+      scale.setAttribute('aria-pressed', String(!!limits));
+      scaleNote.hidden = !limits || plot.hidden;
+      scaleNote.textContent = limits ? [t('viz.axisRange', { from: axisNumber.format(limits.min), to: axisNumber.format(limits.max) }),
+        limits.min > 0 || limits.max < 0 ? t('viz.axisNonzero') : '', domain.clipped ? t('viz.axisClipped', { n: domain.clipped }) : ''].filter(Boolean).join(' ') : '';
+    }
+    if (opts.visibleCount) plot.scrollLeft = force ? scroll : plot.scrollWidth;
   };
   draw();
   if (window.ResizeObserver) {
@@ -137,24 +198,27 @@ const PAD = { top: 10, right: 12, bottom: 26, left: 52 };
  * opts: { labels, longLabels?, series: [{ key, name, color, values }], stacked, format(v), tickFormat(v), visibleCount?, height?, title?, onSelect?(i), selected? }
  */
 export function columnChart(container, opts) {
-  frame(container, opts, (plot, width) => {
+  frame(container, opts, (plot, viewportWidth, limits) => {
     plot.replaceChildren();
-    const n = opts.labels.length, iw = Math.max(40, width - PAD.left - PAD.right), band = iw / Math.max(1, n);
+    const bounds = columnBounds(opts.series, opts.stacked);
+    const min = Math.min(0, ...bounds.filter(Boolean).map(b => b.min)), max = Math.max(0, ...bounds.filter(Boolean).map(b => b.max));
+    const domain = axisDomain(min, max, 4, limits), { ticks, y0, y1 } = domain;
+    const tickFormat = limits ? v => axisNumber.format(v) : opts.tickFormat;
+    const left = limits ? Math.min(120, Math.max(PAD.left, ...ticks.map(v => tickFormat(v).length * 7 + 10))) : PAD.left;
+    const n = opts.labels.length, count = Math.max(1, Math.min(n, opts.visibleCount || n));
+    const width = opts.visibleCount ? (viewportWidth - left - PAD.right) * n / count + left + PAD.right : viewportWidth;
+    const iw = Math.max(40, width - left - PAD.right), band = iw / Math.max(1, n);
     const verticalLabels = opts.visibleCount && band < 48;
     const H = (opts.height || 220) + (verticalLabels ? 38 : 0), bottom = PAD.bottom + (verticalLabels ? 38 : 0);
     const ih = H - PAD.top - bottom;
-    let max = 0, min = 0;
-    for (let i = 0; i < n; i++) {
-      let pos = 0, neg = 0;
-      for (const s of opts.series) { const v = s.values[i] || 0; if (opts.stacked) { if (v > 0) pos += v; else neg += v; } else { pos = Math.max(pos, v); neg = Math.min(neg, v); } }
-      max = Math.max(max, pos); min = Math.min(min, neg);
-    }
-    const { ticks, y0, y1 } = axisDomain(min, max, 4);
     const Y = v => PAD.top + ih - (v - y0) / (y1 - y0) * ih;
     const svg = svgEl('svg', { width, height: H, viewBox: `0 0 ${width} ${H}`, role: 'img', 'aria-label': opts.ariaLabel || opts.title || '' }, plot);
+    const clipId = 'viz-columns-' + ++plotId;
+    const clip = svgEl('clipPath', { id: clipId }, svgEl('defs', {}, svg));
+    svgEl('rect', { x: left, y: PAD.top, width: iw, height: ih }, clip);
     for (const tv of ticks) {
-      svgEl('line', { x1: PAD.left, x2: PAD.left + iw, y1: Y(tv), y2: Y(tv), class: tv === 0 ? 'viz-base' : 'viz-grid' }, svg);
-      if (!opts.visibleCount) svgEl('text', { x: PAD.left - 6, y: Y(tv) + 4, 'text-anchor': 'end', class: 'viz-tick' }, svg).textContent = opts.tickFormat(tv);
+      svgEl('line', { x1: left, x2: left + iw, y1: Y(tv), y2: Y(tv), class: tv === 0 ? 'viz-base' : 'viz-grid' }, svg);
+      if (!opts.visibleCount) svgEl('text', { x: left - 6, y: Y(tv) + 4, 'text-anchor': 'end', class: 'viz-tick' }, svg).textContent = tickFormat(tv);
     }
     const slots = opts.stacked ? 1 : opts.series.length;
     const gap = opts.visibleCount && band >= 48 ? 4 : 2;
@@ -163,8 +227,8 @@ export function columnChart(container, opts) {
     const labelEvery = opts.visibleCount ? 1 : Math.max(1, Math.ceil(n / Math.max(1, Math.floor(iw / 46))));
     const groups = [];
     for (let i = 0; i < n; i++) {
-      const cx = PAD.left + band * i + band / 2;
-      const g = svgEl('g', { class: 'viz-col' + (opts.selected === i ? ' sel' : '') + (opts.partial && opts.partial[i] ? ' partial' : '') }, svg);
+      const cx = left + band * i + band / 2;
+      const g = svgEl('g', { 'clip-path': `url(#${clipId})`, class: 'viz-col' + (opts.selected === i ? ' sel' : '') + (opts.partial && opts.partial[i] ? ' partial' : '') }, svg);
       groups.push(g);
       const segs = opts.series.map((s, si) => ({ s, si, v: s.values[i] })).filter(x => x.v);
       if (opts.stacked) {
@@ -184,8 +248,13 @@ export function columnChart(container, opts) {
         svgEl('text', { x: cx, y, 'text-anchor': verticalLabels ? 'end' : 'middle',
           transform: verticalLabels ? `rotate(-90,${cx},${y})` : null, class: 'viz-tick' }, svg).textContent = opts.labels[i];
       }
+      if (limits && bounds[i]) {
+        for (const [direction, outside, y, dy] of [['up', bounds[i].max > y1, PAD.top + 1, 6], ['down', bounds[i].min < y0, PAD.top + ih - 1, -6]]) {
+          if (outside) svgEl('path', { class: 'viz-overflow ' + direction, d: `M${cx},${y}l-4,${dy}h8Z`, 'aria-hidden': 'true' }, svg);
+        }
+      }
       // 命中区域：整条竖带，比柱子宽
-      const hit = svgEl('rect', { x: PAD.left + band * i, y: PAD.top, width: band, height: ih, class: 'viz-hit', tabindex: '0', role: 'button',
+      const hit = svgEl('rect', { x: left + band * i, y: PAD.top, width: band, height: ih, class: 'viz-hit', tabindex: '0', role: 'button',
         'aria-label': `${opts.longLabels ? opts.longLabels[i] : opts.labels[i]}` }, svg);
       const show = (ev) => {
         groups.forEach(gg => gg.classList.remove('hover')); g.classList.add('hover');
@@ -207,11 +276,12 @@ export function columnChart(container, opts) {
     }
     if (opts.visibleCount) {
       const axis = svgEl('g', { class: 'viz-y-axis', 'aria-hidden': 'true', 'pointer-events': 'none' }, svg);
-      svgEl('rect', { width: PAD.left, height: H, fill: 'var(--surface)' }, axis);
-      for (const tv of ticks) svgEl('text', { x: PAD.left - 6, y: Y(tv) + 4, 'text-anchor': 'end', class: 'viz-tick' }, axis).textContent = opts.tickFormat(tv);
+      svgEl('rect', { width: left, height: H, fill: 'var(--surface)' }, axis);
+      for (const tv of ticks) svgEl('text', { x: left - 6, y: Y(tv) + 4, 'text-anchor': 'end', class: 'viz-tick' }, axis).textContent = tickFormat(tv);
       plot.onscroll = () => axis.setAttribute('transform', `translate(${plot.scrollLeft},0)`);
       plot.onscroll();
     }
+    return { ...domain, clipped: limits ? bounds.filter(b => b && (b.min < y0 || b.max > y1)).length : 0 };
   }, 'bar');
 }
 

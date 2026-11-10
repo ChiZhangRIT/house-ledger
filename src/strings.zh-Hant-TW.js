@@ -1,5 +1,12 @@
 // 台灣繁體中文；僅翻譯介面文案，不轉換使用者資料。
 export const zhTW = {
+  'viz.axisAuto': '縱軸 · 自動', 'viz.axisCustom': '縱軸 · 自訂', 'viz.axisTitle': '調整縱軸範圍',
+  'viz.axisMin': '下限', 'viz.axisMax': '上限', 'viz.axisApply': '套用', 'viz.axisReset': '恢復自動',
+  'viz.axisHint': '請依圖表標題中的單位填寫。超出範圍的資料會以箭頭標示，仍可透過提示框或表格查看原始數值。',
+  'viz.axisInvalid': '請填寫有效數字，且上限必須大於下限。',
+  'viz.axisRange': '自訂縱軸：{from} 至 {to}。',
+  'viz.axisNonzero': '縱軸未從 0 開始，請依數值比較。',
+  'viz.axisClipped': '{n} 組資料超出範圍，箭頭標示截斷方向。',
   'app.name': '房屋帳本',
   'undo': '復原',
   'cancel': '取消',
