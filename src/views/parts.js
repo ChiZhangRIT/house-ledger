@@ -50,10 +50,13 @@ export function billRow(b, ctx, { showProvider = true } = {}) {
 }
 
 /** 分摊表：名字、在住天数、权重、人·天、金额 */
-export function splitTable(bill, ctx, { residents } = {}) {
+export function splitTable(bill, ctx, { residents, onResident } = {}) {
   const p = providerOf(ctx, bill);
   const res = residents || ctx.D.residents;
   const r = billShares(bill, p, res);
+  const personCell = person => h('th', null, onResident && ctx.S.data.residents[person.id] && !person.deleted
+    ? h('button.link-btn.split-person', { type: 'button', 'aria-label': t('res.edit') + ' · ' + person.name, onclick: () => onResident(person) }, avatar(person), person.name)
+    : [avatar(person), ' ', person.name]);
   const rows = [];
   if (r.mode === 'auto') {
     const totalPD = (r.basis || []).reduce((a, b) => a + b.personDays, 0);
@@ -64,8 +67,10 @@ export function splitTable(bill, ctx, { residents } = {}) {
       const first = person.moveIn > bill.periodStart ? person.moveIn : bill.periodStart;
       const lastEx = person.moveOut && person.moveOut < covEnd(bill) ? person.moveOut : covEnd(bill);
       const w1 = weightOn(person, first), w2 = weightOn(person, addDays(lastEx, -1));
+      const name = personCell(person);
+      if (b.absorbed != null) name.append(h('div.sub', null, t('split.absorbed', { amount: b.absorbed })));
       rows.push(h('tr', null,
-        h('th', null, avatar(person), ' ', person.name, b.absorbed != null ? h('div.sub', null, t('split.absorbed', { amount: b.absorbed })) : null),
+        name,
         h('td.num', null, num(days)),
         h('td.num', null, w1 === w2 ? '×' + num(w1, w1 % 1 ? 1 : 0) : `×${w1}→×${w2}`),
         h('td.num', null, num(b.personDays)),
@@ -84,7 +89,7 @@ export function splitTable(bill, ctx, { residents } = {}) {
   const sum = Object.values(r.shares).reduce((a, v) => a + v, 0);
   for (const [id, amt] of Object.entries(r.shares)) {
     const person = ctx.S.data.residents[id] || { id, name: id };
-    rows.push(h('tr', null, h('th', null, avatar(person), ' ', person.name), h('td.num', null, h('b', null, money(amt)))));
+    rows.push(h('tr', null, personCell(person), h('td.num', null, h('b', null, money(amt)))));
   }
   return h('div.split', null,
     h('table.data-table.split-table', null,

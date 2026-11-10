@@ -9,6 +9,7 @@ import { openBillForm } from './billForm.js';
 import { billNotes, fieldGuide } from './notes.js';
 import { providerHistory } from './providerHistory.js';
 import { billDocument } from './documents.js';
+import { openResident } from './residents.js';
 
 export function render(root, ctx, [id]) {
   const b = Object.prototype.hasOwnProperty.call(ctx.S.data.bills, id) ? ctx.S.data.bills[id] : null;
@@ -67,7 +68,7 @@ export function render(root, ctx, [id]) {
 
   const history = providerHistory(ctx, b.providerId); if (history) root.append(history);
   root.append(h('details.card', null, h('summary', null, t('bill.compare')), compareTable(b, ctx)));
-  root.append(h('details.card', null, h('summary', null, t('rent.legacyRules')), splitTable(b, ctx),
+  root.append(h('details.card', null, h('summary', null, t('rent.legacyRules')), splitTable(b, ctx, { onResident: resident => openResident(ctx, resident) }),
     locked ? h('button.link-btn', { type: 'button', onclick: () => unlock(ctx, b) }, t('bill.unlock'))
       : h('button.link-btn', { type: 'button', onclick: () => { const r = billShares(b, p, D.residents); ctx.put('bills', { ...b, allocation: { mode: 'locked', shares: r.shares } }); } }, t('bill.lock'))));
 

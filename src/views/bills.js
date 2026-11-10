@@ -86,7 +86,7 @@ export function render(root, ctx) {
   root.append(h('section.card', null, h('h2.section-h', null, t('u.history', { name: t('u.' + key) })),
     h('p.note.history-count', null, t('u.allHistory', { n: all.length, from: date(all[0].bill.statementDate, 'iso'), to: date(all.at(-1).bill.statementDate, 'iso') })),
     h('div.table-scroll', null, h('table.data-table.utility-history', null,
-      h('thead', null, h('tr', null, [t('field.statementDate'), t('field.periodStart'), t('field.periodEnd'), t('field.providerId'), ...(info.unit ? [t('bill.usage')] : []), t('u.cost')].map(x => h('th', null, x)))),
+      h('thead', null, h('tr', null, [t('field.statementDate'), t('field.periodStart'), t('field.periodEnd'), t('field.providerId'), ...(info.unit ? [t('bill.usage')] : []), t('u.cost')].map((x, i) => h('th' + (i >= 4 ? '.num' : ''), { scope: 'col' }, x)))),
       h('tbody', null, [...all].reverse().map(r => h('tr', null,
         h('th.date-cell', { scope: 'row' }, h('a', { href: '#/bill/' + encodeURIComponent(r.bill.id) }, date(r.bill.statementDate, 'iso'))),
         h('td.date-cell', null, date(r.start, 'iso')), h('td.date-cell', null, date(r.end, 'iso')), h('td', null, D.providers[r.bill.providerId]?.name),

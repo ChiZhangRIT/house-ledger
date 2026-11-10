@@ -128,7 +128,7 @@ const zh = {
   'res.cantDelete': '这位住户已经有账单分摊或收款记录，不能删除；搬走了请填搬出日期。', 'res.deleteConfirm': '删除住户「{name}」？', 'res.added': '已添加住户', 'res.saved': '已保存',
   'res.impactH': '这次修改会改变金额', 'res.impactP': '按新的设置，各人的应收合计会这样变（锁定的历史账单不受影响）：', 'res.impactNote': '以前发出的明细不会自动更新；收款页会提示「发出后有变动」。', 'res.impactGo': '确认修改',
   // 设置
-  'set.rules': '收款规则', 'set.property': '房屋名称', 'set.cycleDay': '每月几号开始一期', 'set.cycleDayHint': '也是房租的到期日。', 'set.grace': '宽限天数', 'set.graceHint': '到期后几天还没付清才算逾期。',
+  'set.rules': '收款规则', 'set.property': '房屋名称', 'set.cycleDay': '每月几号开始一期', 'set.cycleDayHint': '也是房租的到期日。', 'set.grace': '房租宽限天数', 'set.graceHint': '交租日后经过这些天仍未付清，才标为逾期；设 0 天则从次日开始。仅影响逾期标记与汇总，不改变租期或应收金额，也不自动加收费用。',
   'set.ledgerStart': '开账期', 'set.ledgerNone': '还没开始', 'set.ledgerHint': '这一期之前的房租和账单不计入收款；原来表格的历史只用来统计。',
   'set.prorate': '入住、搬出那一期的房租', 'set.prorate.daily': '按天折算', 'set.prorate.full': '收整期',
   'set.payInstructions': '付款说明', 'set.payPh': '比如：Zelle 到 xxx@example.com', 'set.payHint': '附在给室友的明细最后。',
@@ -282,7 +282,7 @@ const en = {
   'res.details': 'Resident details & occupancy dates', 'res.addRent': 'Add monthly rent', 'res.rent': 'Monthly rent', 'res.rentHint': 'Used to calculate rent charges. Add a new amount and effective date when rent changes; log actual receipts with Record rent.', 'res.needName': 'Please enter a name', 'res.needMoveIn': 'Please enter a move-in date', 'res.badMoveOut': 'Move-out must be after move-in',
   'res.cantDelete': 'This resident has bill shares or payments and can’t be deleted; set a move-out date instead.', 'res.deleteConfirm': 'Delete resident “{name}”?', 'res.added': 'Resident added', 'res.saved': 'Saved',
   'res.impactH': 'This change affects amounts', 'res.impactP': 'With the new settings, total charges change like this (locked history is unaffected):', 'res.impactNote': 'Statements already sent won’t update; Collect will flag “changed since sent”.', 'res.impactGo': 'Apply',
-  'set.rules': 'Collection rules', 'set.property': 'Property name', 'set.cycleDay': 'Period starts on day', 'set.cycleDayHint': 'Also the rent due day.', 'set.grace': 'Grace days', 'set.graceHint': 'Days after the due date before it counts as overdue.',
+  'set.rules': 'Collection rules', 'set.property': 'Property name', 'set.cycleDay': 'Period starts on day', 'set.cycleDayHint': 'Also the rent due day.', 'set.grace': 'Rent grace days', 'set.graceHint': 'Days after the agreed rent due date before unpaid rent is marked overdue; 0 means the next day. Only overdue status and totals change; rent periods and charges stay the same. No fees are added automatically.',
   'set.ledgerStart': 'Opening period', 'set.ledgerNone': 'Not started', 'set.ledgerHint': 'Rent and bills before this period aren’t collected; spreadsheet history is for stats only.',
   'set.prorate': 'Rent in move-in/out periods', 'set.prorate.daily': 'Prorate by day', 'set.prorate.full': 'Full period',
   'set.payInstructions': 'Payment instructions', 'set.payPh': 'e.g. Zelle to xxx@example.com', 'set.payHint': 'Appended to statements.',
@@ -426,7 +426,7 @@ Object.assign(en, {
 });
 
 Object.assign(zh, {
-  'set.ledgerHint': '该期之前的房租不纳入当前台账，可在住户详情中独立补记历史房租。', 'rent.legacyRules': 'Utility 费用承担方式',
+  'set.ledgerHint': '该期之前的房租不纳入当前台账，可在住户详情中独立补记历史房租。', 'rent.legacyRules': '费用承担方式',
   'set.dataNote': '导入 House Ledger 数据文件或 JSON 备份，逐条合并，较新的为准；已在 App 中修改的内容不会被旧文件覆盖。',
   'res.ownerNamed': '当前承担人：{name}。', 'res.ownerNotSet': '尚未指定房东，请先标记一位「房东本人」', 'notes.saved': '备注 · {n} 条',
   'set.currentProperty': '当前房屋', 'set.propertyScope': '下方的账单设置与住户设置适用于此房屋。',
@@ -453,7 +453,7 @@ Object.assign(zh, {
   'deleted.ownerConflict': '当前已有另一位房东。请先在住户设置中确认房东身份，再恢复这位房东。',
 });
 Object.assign(en, {
-  'set.ledgerHint': 'Earlier rent is excluded from the current ledger. Add it independently from tenant details.', 'rent.legacyRules': 'Utility cost responsibility',
+  'set.ledgerHint': 'Earlier rent is excluded from the current ledger. Add it independently from tenant details.', 'rent.legacyRules': 'Cost responsibility',
   'set.dataNote': 'Import House Ledger data files or JSON backups. Records merge individually; newer edits are retained instead of being replaced by older files.',
   'res.ownerNamed': 'Currently charged to: {name}.', 'res.ownerNotSet': 'No landlord designated; mark one resident as landlord first', 'notes.saved': 'Notes · {n}',
   'set.currentProperty': 'Current property', 'set.propertyScope': 'The bill and tenant settings below apply to this property.',

@@ -191,6 +191,7 @@ button.stat:hover { border-color: var(--line-2); }
 .person-name { flex: 1; font-weight: 560; }
 .person-amt { font-variant-numeric: tabular-nums; color: var(--ink-2); font-size: 13.5px; }
 .avatar { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; color: #fff; font-weight: 700; font-size: 13px; flex: none; vertical-align: middle; }
+.split-person { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; text-align: left; }
 .latest-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
 .latest-card { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); color: inherit; box-shadow: var(--shadow); text-decoration: none !important; }
 .latest-card:hover { border-color: var(--line-2); }
