@@ -12,5 +12,6 @@ test('sw.js 的 CORE 包含全部程序文件，而且每个文件都存在', ()
   const js = [];
   (function walk(d) { for (const f of fs.readdirSync(path.join(root, d))) { const p = d + '/' + f; if (fs.statSync(path.join(root, p)).isDirectory()) walk(p); else if (f.endsWith('.js')) js.push('./' + p); } })('src');
   for (const f of js) assert.ok(core.includes(f), `${f} 没有写进 sw.js 的 CORE`);
+  for (const f of fs.readdirSync(root).filter(f => f.endsWith('.webmanifest'))) assert.ok(core.includes('./' + f), `${f} 没有写进 sw.js 的 CORE`);
   for (const f of core) if (f !== './') assert.ok(fs.existsSync(path.join(root, f)), `CORE 里的 ${f} 不存在`);
 });

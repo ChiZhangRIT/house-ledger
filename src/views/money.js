@@ -1,6 +1,6 @@
 // 收款相关的面板：记收款、加调整、导出明细、某人某期的明细
 import { h, openSheet, copyText, signButton } from '../ui/dom.js';
-import { t, money, date, period, getLang } from '../i18n.js';
+import { t, money, date, period, getLang, LANG_LABELS } from '../i18n.js';
 import { newId } from '../core/store.js';
 import { addDays, isISODate } from '../core/dates.js';
 import { buildRentLedger, rentPeriodsFor, rentReceiptChanges } from '../core/rent.js';
@@ -233,7 +233,7 @@ export function openStatement(ctx, { residentId, periodKey } = {}) {
   const L = ctx.D.ledger;
   const people = ctx.D.residents.filter(r => !r.isOwner);
   const prefs = ctx.L.prefs;
-  const f = { residentId: residentId || (people[0] && people[0].id), period: periodKey || L.current, lang: prefs.stLang || (getLang() === 'en' ? 'en' : 'zh'), formula: prefs.stFormula !== false, usage: !!prefs.stUsage };
+  const f = { residentId: residentId || (people[0] && people[0].id), period: periodKey || L.current, lang: prefs.stLang || (getLang() === 'zh-Hans' ? 'zh' : getLang()), formula: prefs.stFormula !== false, usage: !!prefs.stUsage };
   const pre = h('pre.statement');
   let current = null;
   const pay = ctx.S.settings.payInstructions || '';
@@ -251,7 +251,7 @@ export function openStatement(ctx, { residentId, periodKey } = {}) {
         h('label.field', null, h('span.field-label', null, t('pay.who')), h('select', { onchange: e => { f.residentId = e.target.value; update(); } }, people.map(r => h('option', { value: r.id, selected: r.id === f.residentId }, r.name)))),
         h('label.field', null, h('span.field-label', null, t('form.collectPeriod')), h('select', { onchange: e => { f.period = e.target.value; update(); } }, periodChoices(ctx).map(k => h('option', { value: k, selected: k === f.period }, periodLabel(ctx, k))))),
         h('label.field', null, h('span.field-label', null, t('st.lang')), h('select', { onchange: e => { f.lang = e.target.value; ctx.setPref('stLang', f.lang); update(); } },
-          h('option', { value: 'zh', selected: f.lang === 'zh' }, '中文'), h('option', { value: 'en', selected: f.lang === 'en' }, 'English')))),
+          ['zh', 'zh-Hant-TW', 'en'].map(l => h('option', { value: l, selected: f.lang === l }, LANG_LABELS[l === 'zh' ? 'zh-Hans' : l]))))),
       h('div.row', null, opt(t('st.formula'), 'formula'), opt(t('st.usage'), 'usage')),
       pay ? null : h('p.note', null, t('st.noPay')),
       pre),

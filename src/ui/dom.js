@@ -1,4 +1,5 @@
 // 小工具：建元素（文字一律用 textContent，不拼 HTML）、底部面板、提示条。
+import { t } from '../i18n.js';
 
 /**
  * h('div.card', { onclick, title }, '文字', 子元素, [数组也行], null 跳过)
@@ -49,7 +50,7 @@ export function toast(msg, { action, onAction, ms = 4000 } = {}) {
  * openSheet({ title, body: Node | (sheet) => Node, foot: [按钮…], wide, onClose })
  * 返回 { el, body, close }
  */
-export function openSheet({ title, body, foot, wide, onClose, beforeClose, closeLabel = 'Close' }) {
+export function openSheet({ title, body, foot, wide, onClose, beforeClose, closeLabel = t('rent.close') }) {
   const dlg = h('dialog.sheet' + (wide ? '.wide' : ''), { 'aria-label': title });
   const bodyEl = h('div.sheet-body');
   const close = () => { if (dlg.open) dlg.close(); };

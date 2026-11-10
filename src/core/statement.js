@@ -16,6 +16,16 @@ const W = {
     credit: '（预付余额，会自动抵以后的费用）', settled: '已结清，谢谢！', pay: '付款方式：', generated: (d) => `生成于 ${d}`,
     period: (m) => `${m}期`, month: (y, m) => `${y}年${m}月`, rentUnknown: '房租（金额待定）',
   },
+  'zh-Hant-TW': {
+    title: (p, range, name) => `${p} · ${range} 明細 · ${name}`,
+    previous: '上期未繳', rent: r => `租金 ${r}`, prorated: (n, d) => `（居住 ${n}/${d} 天，按日比例計算）`,
+    bill: (prov, range, days, total) => `${prov} ${range}（${days} 天）合計 ${total}`,
+    formula: (d, w, wd, all, pct) => `居住 ${d} 天 × ${w} = ${wd} ÷ 全屋 ${all} 人日 = ${pct}`,
+    formulaPd: (d, wd, all, pct) => `居住 ${d} 天，計 ${wd} 人日 ÷ 全屋 ${all} 人日 = ${pct}`,
+    usage: s => `用量：${s}`, adj: l => `調整：${l}`, paid: '本期已付', total: '應付合計', dueBy: d => `請於 ${d} 前付款`,
+    credit: '（預付餘額，會自動折抵之後的費用）', settled: '已結清，謝謝！', pay: '付款方式：', generated: d => `建立日期：${d}`,
+    period: m => `${m}期`, month: (y, m) => `${y}年${m}月`, rentUnknown: '租金（金額待確認）',
+  },
   en: {
     title: (p, range, name) => `${p} statement (${range}) · ${name}`,
     previous: 'Previous balance', rent: (r) => `Rent ${r}`, prorated: (n, d) => ` (${n} of ${d} days, prorated)`,
@@ -32,11 +42,11 @@ const md = (iso) => { const [, m, d] = iso.split('-').map(Number); return `${m}/
 const range = (a, b) => `${md(a)}–${md(b)}`;
 
 /**
- * @param o { state, ledger, residentId, period, lang: 'zh'|'en', today, showFormula = true, showUsage = false, payInstructions }
+ * @param o { state, ledger, residentId, period, lang: 'zh'|'zh-Hant-TW'|'en', today, showFormula = true, showUsage = false, payInstructions }
  * @returns {{ text: string, lines: Array<{ ref, label, amount }>, totalDue: number }}
  */
 export function buildStatement(o) {
-  const w = W[o.lang === 'en' ? 'en' : 'zh'];
+  const w = W[o.lang] || W.zh;
   const r = o.state.data.residents[o.residentId];
   const P = o.ledger.period(o.period);
   const me = P.people[o.residentId];

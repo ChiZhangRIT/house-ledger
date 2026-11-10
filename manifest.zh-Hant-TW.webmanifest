@@ -1,0 +1,14 @@
+{
+  "name": "房屋帳本",
+  "short_name": "帳本",
+  "lang": "zh-Hant-TW",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f4ef",
+  "theme_color": "#f6f4ef",
+  "icons": [
+    { "src": "icons/icon-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

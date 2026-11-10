@@ -1,9 +1,10 @@
-// 界面文字和格式：简体中文 / English。文字表在 strings.js。
+// 界面文字和格式：简体中文 / 繁體中文（台灣） / English。
 // t('key', { amount: 12.3, due: '2026-11-04', pct: 0.12 })：变量按名字自动格式化
 //   amount/sum/diff/total/balance/paid/owed/rate → 金额；pct → 百分比；'YYYY-MM-DD' 字符串 → 日期
 import { STRINGS } from './strings.js';
 
-export const LANGS = ['zh-Hans', 'en'];
+export const LANGS = ['zh-Hans', 'zh-Hant-TW', 'en'];
+export const LANG_LABELS = { 'zh-Hans': '简体中文', 'zh-Hant-TW': '繁體中文（台灣）', en: 'English' };
 let lang = 'zh-Hans';
 export const getLang = () => lang;
 export function setLang(l) { lang = LANGS.includes(l) ? l : 'zh-Hans'; }

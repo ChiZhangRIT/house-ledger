@@ -1,6 +1,6 @@
 // 当前房屋资料；App、账单、住户三组设置。
 import { h, openSheet, copyText, download, toast } from '../ui/dom.js';
-import { t, getLang, LANGS } from '../i18n.js';
+import { t, getLang, LANGS, LANG_LABELS } from '../i18n.js';
 import { normalizeState, mergeStates, live, canon } from '../core/store.js';
 import { SyncError } from '../core/sync.js';
 import { SPLIT_CATEGORIES } from '../core/providers.js';
@@ -64,7 +64,7 @@ export function render(root, ctx) {
   // 语言与外观
   appSettings.append(section(t('set.look'),
     h('div.field-row', null,
-      field(t('set.lang'), h('select', { onchange: e => ctx.setLang(e.target.value) }, LANGS.map(l => h('option', { value: l, selected: l === getLang() }, l === 'en' ? 'English' : '简体中文')))),
+      field(t('set.lang'), h('select', { onchange: e => ctx.setLang(e.target.value) }, LANGS.map(l => h('option', { value: l, selected: l === getLang() }, LANG_LABELS[l])))),
       field(t('set.theme'), h('select', { onchange: e => ctx.setTheme(e.target.value) }, ['auto', 'light', 'dark'].map(v => h('option', { value: v, selected: (ctx.L.theme || 'auto') === v }, t('theme.' + v))))))));
 
   appSettings.append(dataSettings,

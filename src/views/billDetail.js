@@ -1,6 +1,6 @@
 // 账单详情：全部字段、分项、用量和单价、对比、分摊、来源；可以编辑、标记已缴、锁定/解锁、删除、加到日历
 import { h, openSheet, download } from '../ui/dom.js';
-import { t, money, date, period, num, rate, unitLabel, relDays } from '../i18n.js';
+import { t, money, date, period, num, rate, unitLabel, relDays, getLang } from '../i18n.js';
 import { providerColor, ITEM_COLOR } from '../ui/colors.js';
 import { billStats, billShares } from '../core/analytics.js';
 import { dayNumber } from '../core/dates.js';
@@ -80,7 +80,7 @@ export function render(root, ctx, [id]) {
       src.file ? fact(t('src.file'), src.file) : null,
       src.sha256 ? fact('SHA-256', src.sha256.slice(0, 12) + '…') : null,
       src.parser ? fact(t('src.parser'), src.parser) : null,
-      src.at ? fact(t('src.at'), new Date(src.at).toLocaleString()) : null)));
+      src.at ? fact(t('src.at'), new Date(src.at).toLocaleString(getLang())) : null)));
 }
 
 const fact = (k, v) => h('div', null, h('dt', null, k), h('dd', null, v));

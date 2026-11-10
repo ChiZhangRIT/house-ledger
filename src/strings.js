@@ -1,4 +1,5 @@
-// 界面文字：简体中文（默认）和 English。{name} 是变量；值是函数的条目自己处理格式（见 i18n.js 的 t()）。
+// 界面文字；台灣繁體中文獨立於 strings.zh-Hant-TW.js。{name} 是变量；函数条目自己处理格式。
+import { zhTW } from './strings.zh-Hant-TW.js';
 const plural = (n, one, many) => (n === 1 ? one : many);
 
 const zh = {
@@ -782,4 +783,4 @@ Object.assign(en, {
   'income.note': 'Rent receipts less rent refunds only. Deposits and deposit returns are separate; unknown amounts are excluded from totals. A month without records is not necessarily vacant.',
 });
 
-export const STRINGS = { 'zh-Hans': zh, en };
+export const STRINGS = { 'zh-Hans': zh, 'zh-Hant-TW': zhTW, en };

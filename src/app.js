@@ -115,6 +115,8 @@ const ctx = {
 function renderShell() {
   document.documentElement.lang = getLang();
   document.title = t('app.name');
+  document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute('content', t('app.name'));
+  document.querySelector('link[rel="manifest"]')?.setAttribute('href', getLang() === 'zh-Hant-TW' ? 'manifest.zh-Hant-TW.webmanifest' : 'manifest.webmanifest');
   document.body.dataset.drop = t('drop.hint');
   const tabsEl = document.getElementById('tabs'); if (tabsEl) tabsEl.setAttribute('aria-label', t('nav.label'));
   const side = $('#side'), tabs = $('#tabs');

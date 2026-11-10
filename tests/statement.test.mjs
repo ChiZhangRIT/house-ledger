@@ -26,4 +26,11 @@ test('明细：房租、账单份额和计算过程、已付、应付合计', ()
   const en = buildStatement({ state: s, ledger, residentId: 'a', period: '2025-02', lang: 'en', today: '2025-02-20' });
   assert.match(en.text, /Feb 2025 statement \(2\/16–3\/15\) · Alice/);
   assert.match(en.text, /Amount due \$30\.00/);
+  const tw = buildStatement({ state: s, ledger, residentId: 'a', period: '2025-02', lang: 'zh-Hant-TW', today: '2025-02-20', payInstructions: '原始付款说明' });
+  assert.match(tw.text, /2025年2月期 · 2\/16–3\/15 明細 · Alice/);
+  assert.match(tw.text, /租金 2\/16–3\/15  \$900\.00/);
+  assert.match(tw.text, /居住 31 天 × 1 = 31 ÷ 全屋 62 人日 = 50\.00%  \$30\.00/);
+  assert.match(tw.text, /應付合計 \$30\.00 · 請於 2\/19 前付款/);
+  assert.ok(tw.text.includes('付款方式：原始付款说明'));
+  assert.equal(tw.totalDue, st.totalDue);
 });
