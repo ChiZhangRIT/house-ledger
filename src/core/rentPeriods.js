@@ -50,6 +50,8 @@ export function scheduledPeriods(state, resident, today, future = 2) {
   const terms = (resident.rentSchedules || []).filter(validSchedule).sort((a, b) => a.from.localeCompare(b.from));
   const stop = monthAfter(today, future), cutoff = rentTrackingStart(state, resident);
   if (!cutoff) return [];
+  // 房租包含搬出当天；转换成内部半开区间时，截止点取次日。
+  const moveOutExclusive = resident.moveOut ? addDays(resident.moveOut, 1) : null;
   // 删除快照也抑制自动候选，避免删除后以另一个自动 id 再次出现。
   const saved = Object.values(state.data.rents).filter(r => r.residentId === resident.id);
   const out = [];
@@ -59,7 +61,7 @@ export function scheduledPeriods(state, resident, today, future = 2) {
     for (let n = 0; key <= stop && n < 1200; n++, key = monthAfter(key)) {
       const nominalStart = monthDay(key, term.cycleDay), next = monthDay(monthAfter(key), term.cycleDay);
       const start = [nominalStart, term.from, resident.moveIn].sort().at(-1);
-      const endExclusive = [next, terms[i + 1]?.from, resident.moveOut].filter(Boolean).sort()[0];
+      const endExclusive = [next, terms[i + 1]?.from, moveOutExclusive].filter(Boolean).sort()[0];
       if (start >= endExclusive || start < cutoff) continue;
       const rec = { id: `rp:${resident.id}:${start}`, residentId: resident.id, history: false, datesConfirmed: true,
         periodStart: start, periodEnd: addDays(endExclusive, -1), dueDate: monthDay(monthAfter(key, term.dueMonthOffset), term.dueDay),

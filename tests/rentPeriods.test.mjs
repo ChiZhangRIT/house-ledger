@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { blankState } from '../src/core/store.js';
 import { scheduledPeriods, rentDates, validateRentPeriod, validateSchedules, rentTrackingStart } from '../src/core/rentPeriods.js';
-import { buildRentLedger } from '../src/core/rent.js';
+import { buildRentLedger, rentPeriodsFor } from '../src/core/rent.js';
 
 function fixture() {
   const s = blankState(); s.settings = { ledgerStart: '2026-10', graceDays: 0 };
@@ -36,7 +36,7 @@ test('首末期按实际居住截短，已保存租期不随约定改变', () =>
   const s = fixture(), r = s.data.residents.b;
   r.moveIn = '2026-10-20'; r.moveOut = '2026-11-10';
   const first = scheduledPeriods(s, r, '2026-11-01')[0];
-  assert.deepEqual([first.periodStart, first.periodEnd], ['2026-10-20','2026-11-09']);
+  assert.deepEqual([first.periodStart, first.periodEnd], ['2026-10-20','2026-11-10']);
   s.data.rents[first.id] = { ...first, amount: 700 };
   const previous = structuredClone(r);
   r.rentSchedules[0].cycleDay = 1;
@@ -81,7 +81,7 @@ test('短期应收按实际覆盖天数计算，已确认金额不被月租修�
   const s = fixture(), r = s.data.residents.b;
   r.moveIn = '2026-10-20'; r.moveOut = '2026-11-10';
   const first = rentPeriodsFor(s, 'b', '2026-11-03')[0];
-  assert.equal(first.amount, Math.round(1000 * 21 / 31 * 100) / 100);
+  assert.equal(first.amount, Math.round(1000 * 22 / 31 * 100) / 100);
   s.data.rents[first.id] = { ...first, amount: 700 };
   r.rent[0].amount = 5000;
   assert.equal(rentPeriodsFor(s, 'b', '2026-11-03')[0].amount, 700);
@@ -197,4 +197,48 @@ test('修改跟踪日保留已确认应收、收款和历史记录，不把历�
   assert.equal(buildRentLedger(s, '2026-10-18').people.b.outstanding, 600);
   assert.equal(s.data.rents.old, old);
   assert.equal(s.data.payments.p.rentId, saved.id);
+});
+
+function moveOutFixture(moveOut = '2025-04-04', cycleDay = 16) {
+  const s = blankState();
+  s.data.residents.r = { id: 'r', name: 'Test', moveIn: '2024-10-19', moveOut, rentTrackingStart: '2024-10-19',
+    rent: [{ from: '2024-10-19', amount: 1700 }],
+    rentSchedules: [{ from: '2024-10-19', cycleDay, dueDay: 15, dueMonthOffset: 0 }] };
+  return s;
+}
+
+test('搬出当天计房租：4月4日搬出，末期覆盖3月16日至4月4日，20天收1096.77', () => {
+  const s = moveOutFixture(), last = rentPeriodsFor(s, 'r', '2025-04-05').at(-1);
+  assert.deepEqual([last.periodStart, last.periodEnd, last.dueDate, last.amount], ['2025-03-16', '2025-04-04', '2025-03-15', 1096.77]);
+  assert.equal(buildRentLedger(s, '2025-04-05').people.r.items.find(x => x.rentId === last.id).cents, 109677);
+});
+
+test('搬出日落在租期首日、末日、月底及闰日时计入当天，不多生成下一期', () => {
+  for (const [moveOut, cycleDay, start, amount] of [
+    ['2025-04-15', 16, '2025-03-16', 1700],
+    ['2025-04-16', 16, '2025-04-16', 56.67],
+    ['2025-04-30', 1, '2025-04-01', 1700],
+    ['2025-05-01', 1, '2025-05-01', 54.84],
+    ['2028-02-29', 1, '2028-02-01', 1700],
+    ['2025-12-31', 1, '2025-12-01', 1700],
+    ['2026-01-01', 1, '2026-01-01', 54.84],
+  ]) {
+    const s = moveOutFixture(moveOut, cycleDay);
+    if (moveOut === start) s.data.residents.r.rentTrackingStart = moveOut;
+    const rows = rentPeriodsFor(s, 'r', moveOut), last = rows.at(-1);
+    assert.deepEqual([last?.periodStart, last?.periodEnd, last?.amount], [start, moveOut, amount], moveOut);
+    assert.ok(rows.every(x => x.periodEnd <= moveOut), moveOut);
+  }
+});
+
+test('修正自动搬出边界后，已有确认租期、金额和收款仍保留，不重复补出一天', () => {
+  const s = moveOutFixture();
+  const saved = { id: 'rp:r:2025-03-16', residentId: 'r', history: false, datesConfirmed: true,
+    periodStart: '2025-03-16', periodEnd: '2025-04-03', dueDate: '2025-03-15', amount: 1041.94, note: '已确认的旧记录' };
+  s.data.rents[saved.id] = saved;
+  s.data.payments.p = { id: 'p', residentId: 'r', purpose: 'rent', rentId: saved.id, date: '2025-03-15', amount: 1041.94 };
+  const original = structuredClone(s.data), rows = rentPeriodsFor(s, 'r', '2025-04-05');
+  assert.deepEqual(rows.at(-1), { ...saved, legacyDate: null });
+  assert.equal(rows.filter(x => x.periodStart >= '2025-03-16').length, 1);
+  assert.deepEqual(s.data, original);
 });

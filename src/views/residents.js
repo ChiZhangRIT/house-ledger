@@ -164,7 +164,7 @@ export function openResident(ctx, r) {
     trackingDate.hidden = trackingMode !== 'custom';
     trackingSummary.textContent = trackingMode === 'off' ? t('rent.trackingOffSummary') : isISODate(w.rentTrackingStart)
       ? t(trackingMode === 'moveIn' ? 'rent.trackingMoveInSummary' : 'rent.trackingCustomSummary', { date: w.rentTrackingStart }) : t('rent.trackingDatePending');
-    trackingNote.hidden = trackingMode === 'off' || !isISODate(w.moveOut) || !isISODate(w.rentTrackingStart) || w.rentTrackingStart < w.moveOut;
+    trackingNote.hidden = trackingMode === 'off' || !isISODate(w.moveOut) || !isISODate(w.rentTrackingStart) || w.rentTrackingStart <= w.moveOut;
     trackingNote.textContent = t('rent.trackingAfterMoveOut');
   };
   const trackingSelect = h('select', { onchange: e => {
