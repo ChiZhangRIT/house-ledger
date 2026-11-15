@@ -59,8 +59,9 @@ h1, h2, h3 { margin: 0; font-weight: 650; letter-spacing: -0.01em; }
 .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-s); color: var(--ink-2); font-weight: 520; }
 .nav-item:hover { background: var(--surface-3); text-decoration: none; }
 .nav-item.on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
-.nav-icon { width: 20px; text-align: center; font-size: 15px; color: var(--ink-3); }
-.nav-item.on .nav-icon { color: var(--accent); }
+.nav-icon { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 34px; height: 34px; border-radius: 9px; background: var(--accent-soft); color: var(--accent); }
+.nav-icon svg { display: block; width: 24px; height: 24px; }
+.nav-item.on .nav-icon, .tab.on .nav-icon { background: var(--accent); color: var(--accent-ink); }
 .side-foot { margin-top: auto; padding: 8px; }
 .topbar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px; max-width: 1160px; margin: 0 auto 8px; padding: 18px 0 12px; background: linear-gradient(var(--bg) 80%, transparent); }
 .topbar h1 { font-size: 24px; }
@@ -76,9 +77,8 @@ h1, h2, h3 { margin: 0; font-weight: 650; letter-spacing: -0.01em; }
   .topbar .top-more { display: inline-flex; }
   #tabs { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; justify-content: space-around; align-items: flex-end;
     padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-top: 1px solid var(--line); }
-  .tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 4px 0; font-size: 11px; color: var(--ink-3); background: none; border: 0; min-height: 44px; }
-  .tab .nav-icon { font-size: 18px; width: auto; }
-  .tab.on, .tab.on .nav-icon { color: var(--accent); text-decoration: none; }
+  .tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 4px 0; font-size: 11px; color: var(--ink-2); background: none; border: 0; min-height: 44px; }
+  .tab.on { color: var(--accent); text-decoration: none; }
   .tab-add { flex: none; width: 56px; height: 56px; margin: 0 6px 6px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 28px; justify-content: center; box-shadow: 0 4px 14px rgba(15, 110, 110, .35); cursor: pointer; }
   #topSync .sync-badge { font-size: 12px; }
   input, select, textarea, textarea.paste { font-size: 16px !important; }   /* 小于 16px 时 iOS 点进去会放大页面 */

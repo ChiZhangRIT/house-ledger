@@ -15,7 +15,8 @@ import { openAdd, addFiles } from './views/add.js';
 const KEY = 'hl.state', LKEY = 'hl.local';
 const VIEWS = { bills, bill: billDetail, tenants, person, settings };
 const NAV = [
-  { id: 'bills', icon: '▥' }, { id: 'tenants', icon: '⌂' },
+  { id: 'bills', icon: 'M6 3h12a1 1 0 0 1 1 1v17l-3-2-4 2-4-2-3 2V4a1 1 0 0 1 1-1Z M9 7h6M9 11h6M9 15h3' },
+  { id: 'tenants', icon: 'M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z M3 20v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1 M17 4.5a3.5 3.5 0 0 1 0 6 M18 14a4 4 0 0 1 3 4v2' },
 ];
 const DEVICE = /iPad/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ? 'iPad'
   : /iPhone|iPod/.test(navigator.userAgent) ? 'iPhone' : /Mac/.test(navigator.platform) ? 'Mac' : 'Browser';
@@ -112,6 +113,11 @@ const ctx = {
 };
 
 // ---------- 外壳：侧边栏（大屏）/ 底部标签（手机） ----------
+function navIcon(path) {
+  return h('span.nav-icon', { 'aria-hidden': 'true' },
+    h('svg', { viewBox: '0 0 24 24', width: 24, height: 24, fill: 'none', stroke: 'currentColor', 'stroke-width': 1.9, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', focusable: 'false' },
+      h('path', { svg: true, d: path })));
+}
 function renderShell() {
   document.documentElement.lang = getLang();
   document.title = t('app.name');
@@ -126,10 +132,10 @@ function renderShell() {
     h('div.brand', null, h('img', { src: 'icons/icon-180-v2.png', alt: '', width: 32, height: 32 }),
       h('div', null, h('b', null, t('app.name')), S.settings.propertyName ? h('small', null, S.settings.propertyName) : null)),
     h('nav', { 'aria-label': t('nav.label') }, NAV.map(n => h('a.nav-item' + (cur === n.id ? '.on' : ''), { href: '#/' + n.id, 'aria-current': cur === n.id ? 'page' : null },
-      h('span.nav-icon', { 'aria-hidden': 'true' }, n.icon), t('nav.' + n.id)))),
+      navIcon(n.icon), t('nav.' + n.id)))),
     h('div.side-foot', null, h('a.nav-item', { href: '#/settings' }, '⚙ ' + t('nav.settings')), h('div.sync-status', null, syncBadge())),
   );
-  tabs.replaceChildren(...NAV.map(n => h('a.tab' + (cur === n.id ? '.on' : ''), { href: '#/' + n.id, 'aria-current': cur === n.id ? 'page' : null }, h('span.nav-icon', { 'aria-hidden': 'true' }, n.icon), h('span', null, t('nav.' + n.id)))));
+  tabs.replaceChildren(...NAV.map(n => h('a.tab' + (cur === n.id ? '.on' : ''), { href: '#/' + n.id, 'aria-current': cur === n.id ? 'page' : null }, navIcon(n.icon), h('span', null, t('nav.' + n.id)))));
 }
 
 function syncBadge() {
