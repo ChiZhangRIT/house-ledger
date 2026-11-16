@@ -18,6 +18,7 @@ const NAV = [
   { id: 'bills', icon: 'M6 3h12a1 1 0 0 1 1 1v17l-3-2-4 2-4-2-3 2V4a1 1 0 0 1 1-1Z M9 7h6M9 11h6M9 15h3' },
   { id: 'tenants', icon: 'M10 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z M3 20v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1 M17 4.5a3.5 3.5 0 0 1 0 6 M18 14a4 4 0 0 1 3 4v2' },
 ];
+const SETTINGS_ICON = 'M10 3h4l.5 2.5 1.7 1 2.4-.8 2 3.4-1.9 1.7v2l1.9 1.7-2 3.4-2.4-.8-1.7 1L14 21h-4l-.5-2.5-1.7-1-2.4.8-2-3.4L5.3 13v-2L3.4 9.3l2-3.4 2.4.8 1.7-1L10 3Z M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z';
 const DEVICE = /iPad/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ? 'iPad'
   : /iPhone|iPod/.test(navigator.userAgent) ? 'iPhone' : /Mac/.test(navigator.platform) ? 'Mac' : 'Browser';
 
@@ -133,7 +134,7 @@ function renderShell() {
       h('div', null, h('b', null, t('app.name')), S.settings.propertyName ? h('small', null, S.settings.propertyName) : null)),
     h('nav', { 'aria-label': t('nav.label') }, NAV.map(n => h('a.nav-item' + (cur === n.id ? '.on' : ''), { href: '#/' + n.id, 'aria-current': cur === n.id ? 'page' : null },
       navIcon(n.icon), t('nav.' + n.id)))),
-    h('div.side-foot', null, h('a.nav-item', { href: '#/settings' }, '⚙ ' + t('nav.settings')), h('div.sync-status', null, syncBadge())),
+    h('div.side-foot', null, h('a.nav-item' + (cur === 'settings' ? '.on' : ''), { href: '#/settings', 'aria-current': cur === 'settings' ? 'page' : null }, navIcon(SETTINGS_ICON), t('nav.settings')), h('div.sync-status', null, syncBadge())),
   );
   tabs.replaceChildren(...NAV.map(n => h('a.tab' + (cur === n.id ? '.on' : ''), { href: '#/' + n.id, 'aria-current': cur === n.id ? 'page' : null }, navIcon(n.icon), h('span', null, t('nav.' + n.id)))));
 }

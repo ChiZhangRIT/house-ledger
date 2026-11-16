@@ -62,7 +62,8 @@ h1, h2, h3 { margin: 0; font-weight: 650; letter-spacing: -0.01em; }
 .nav-icon { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 34px; height: 34px; border-radius: 9px; background: var(--accent-soft); color: var(--accent); }
 .nav-icon svg { display: block; width: 24px; height: 24px; }
 .nav-item.on .nav-icon, .tab.on .nav-icon { background: var(--accent); color: var(--accent-ink); }
-.side-foot { margin-top: auto; padding: 8px; }
+.side-foot { margin-top: auto; padding: 8px 0; }
+.side-foot .sync-status { padding: 0 8px; }
 .topbar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px; max-width: 1160px; margin: 0 auto 8px; padding: 18px 0 12px; background: linear-gradient(var(--bg) 80%, transparent); }
 .topbar h1 { font-size: 24px; }
 .topbar #topSync, .topbar .top-more { display: none; }
