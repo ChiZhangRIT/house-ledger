@@ -17,7 +17,7 @@ export function providerHistory(ctx, providerId) {
   columnChart(card, { title: t('bills.providerCost', { name: provider.name }),
     labels: bills.map(b => b.statementDate.slice(0, 7).replace('-', '/')),
     longLabels: bills.map(b => `${date(b.statementDate, 'iso')} · ${period(b.periodStart, b.periodEnd, 'iso')}`),
-    series, stacked: true, visibleCount: 12, format: v => money(v), tickFormat: v => money(v, { whole: v === 0 || Math.abs(v) >= 10 }),
+    series, stacked: true, visibleCount: 12, billHelp: true, format: v => money(v), tickFormat: v => money(v, { whole: v === 0 || Math.abs(v) >= 10 }),
     totalLabel: t('viz.total'), tableLabel: t('viz.table'), xName: t('field.statementDate'), height: 260,
     onSelect: i => ctx.nav('bill/' + encodeURIComponent(bills[i].id)) });
   card.append(h('p.note', null, t('bills.providerCostNote', { n: bills.length })));

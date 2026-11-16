@@ -20,9 +20,8 @@ export function render(root, ctx) {
       h('div.small.muted', null, t('bills.issued') + ' ' + date(b.statementDate, 'iso')))))));
   const key = UTILITIES.includes(prefs.utility) ? prefs.utility : 'electricity';
   const info = UTILITY_INFO[key], all = utilityRows(D.bills, D.providers, key, ctx.S.data.servicePeriods);
-  const range = ['12', '24', 'all'].includes(prefs.utilityRange) ? prefs.utilityRange : '12';
   const daily = prefs.utilityMetric === 'daily';
-  const rows = range === 'all' ? all : all.slice(-Number(range));
+  const rows = all;
   const set = (k, v) => { ctx.setPref(k, v); ctx.render(); };
   root.append(h('section', null,
     h('h2.section-h', null, t('u.browse')),
@@ -44,9 +43,7 @@ export function render(root, ctx) {
   root.append(h('p.note', null, t('u.amountBasis')));
   root.append(h('div.chart-controls', null,
     h('div.seg-tabs', { role: 'group', 'aria-label': t('u.metric') }, ['total', 'daily'].map(m =>
-      h('button.seg-tab' + ((m === 'daily') === daily ? '.on' : ''), { type: 'button', 'aria-pressed': String((m === 'daily') === daily), onclick: () => set('utilityMetric', m) }, t('u.metric.' + m)))),
-    h('label.select', null, h('span.sr-only', null, t('u.range')), h('select', { 'aria-label': t('u.range'), onchange: e => set('utilityRange', e.target.value) },
-      ['12', '24', 'all'].map(r => h('option', { value: r, selected: r === range }, t('u.range.' + r)))))));
+      h('button.seg-tab' + ((m === 'daily') === daily ? '.on' : ''), { type: 'button', 'aria-pressed': String((m === 'daily') === daily), onclick: () => set('utilityMetric', m) }, t('u.metric.' + m))))));
   const comparisons = daily ? new Map(all.map(r => [r.bill.id, utilityYearComparison(r, all)])) : null;
   const chart = (field, title, format, tickFormat) => {
     const el = h('section.card.chart-card');
@@ -64,7 +61,7 @@ export function render(root, ctx) {
         return `${date(r.bill.statementDate, 'iso')} · ${r.start ? period(r.start, r.end, 'iso') : t('u.unknownPeriod')}`
           + (daily ? ` · ${ref ? t('u.referencePeriod') + ' ' + period(ref.start, ref.end, 'iso') : t('u.yoyMissing')}` : '');
       }),
-      series, stacked, visibleCount: 12, totalLabel: t('viz.total'),
+      series, stacked, visibleCount: 12, billHelp: true, totalLabel: t('viz.total'),
       tableLabel: t('viz.table'), xName: t('field.statementDate'), format, tickFormat, height: 240,
       onSelect: i => ctx.nav('bill/' + encodeURIComponent(rows[i].bill.id)) });
     return el;
@@ -82,7 +79,9 @@ export function render(root, ctx) {
     h('p.note', null, t('u.dailyMethod')));
   }
   root.append(h('p.note', null, t('u.chartNote')));
-  root.append(fieldGuide(info.items || ['internet', 'taxes', 'partial_charges', 'account_charges']));
+  const guide = fieldGuide(info.items || ['internet', 'taxes', 'partial_charges', 'account_charges']);
+  guide.append(h('p.small.muted', null, t('u.dataNote', { mode: t('u.metric.daily') })));
+  root.append(guide);
   root.append(h('section.card', null, h('h2.section-h', null, t('u.history', { name: t('u.' + key) })),
     h('p.note.history-count', null, t('u.allHistory', { n: all.length, from: date(all[0].bill.statementDate, 'iso'), to: date(all.at(-1).bill.statementDate, 'iso') })),
     h('div.table-scroll', null, h('table.data-table.utility-history', null,

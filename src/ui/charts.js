@@ -150,10 +150,16 @@ function frame(container, opts, drawPlot, legendKind) {
   if (scaleNote) scaleNote.hidden = true;
   const table = htmlEl('div', 'viz-table', container);
   table.hidden = true;
+  const help = opts.billHelp ? htmlEl('p', 'note viz-help', container) : null;
+  if (help) {
+    for (const input of ['touch', 'mouse']) htmlEl('span', 'viz-' + input + '-help', help,
+      t('viz.' + input + 'Help') + (opts.visibleCount && opts.labels.length > opts.visibleCount ? ' ' + t('viz.' + input + 'Scroll') : ''));
+  }
   toggle.onclick = () => {
     hideTip();
     const on = table.hidden;
     table.hidden = !on; plot.hidden = on;
+    if (help) help.hidden = on;
     if (scale) { scale.disabled = on; scaleNote.hidden = on || !limits; }
     toggle.setAttribute('aria-pressed', String(on));
     if (on) renderTable(table, opts);
@@ -208,7 +214,7 @@ const PAD = { top: 10, right: 12, bottom: 26, left: 52 };
 
 /**
  * 柱状图。
- * opts: { labels, longLabels?, series: [{ key, name, color, values }], stacked, format(v), tickFormat(v), visibleCount?, height?, title?, onSelect?(i), selected? }
+ * opts: { labels, longLabels?, series: [{ key, name, color, values }], stacked, format(v), tickFormat(v), visibleCount?, height?, title?, onSelect?(i), selected?, billHelp? }
  */
 export function columnChart(container, opts) {
   frame(container, opts, (plot, viewportWidth, limits) => {

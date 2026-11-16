@@ -9,6 +9,7 @@
   <p>仅使用合成数据，模拟触摸后没有 blur / pointerleave 事件的情况。</p>
   <button class="btn primary" id="run" type="button">运行检查</button>
   <button class="btn" id="preview" type="button">预览首次触屏点按</button>
+  <button class="btn" id="history" type="button">预览全部账单历史</button>
   <p id="result" role="status">尚未运行</p>
   <ol id="results"></ol>
   <div id="fixture"></div>
@@ -16,6 +17,9 @@
 </main>
 <script type="module">
 import { columnChart, lineChart } from '../src/ui/charts.js';
+import { render as renderBills } from '../src/views/bills.js';
+import { providerHistory } from '../src/views/providerHistory.js';
+import { LANGS, setLang, t } from '../src/i18n.js';
 
 const fixture = document.getElementById('fixture');
 const outside = document.getElementById('outside');
@@ -26,7 +30,7 @@ const options = {
   series: [{ name: '电力输配费', color: '#2a78d6', values: [100, 120] },
     { name: '发电费', color: '#eda100', values: [20, 30] }],
   stacked: true, format: n => '$' + n.toFixed(2), tickFormat: n => '$' + n,
-  tableLabel: '表格', totalLabel: '合计', height: 200,
+  tableLabel: '表格', totalLabel: '合计', height: 200, billHelp: true,
 };
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 const visibleTip = () => document.querySelector('.viz-tip:not([hidden])');
@@ -58,7 +62,82 @@ const tap = (chart, index = 0, legacyClick = false) => {
   hit.dispatchEvent(new PointerEvent('pointerleave', { ...event, bubbles: false }));
   hit.dispatchEvent(legacyClick ? new MouseEvent('click', event) : new PointerEvent('click', event));
 };
+const billHistory = (utility = 'electricity', metric = 'total') => {
+  const water = utility === 'water', count = water ? 15 : 26;
+  const bills = Array.from({ length: count }, (_, i) => {
+    const start = new Date(Date.UTC(2024, i * (water ? 2 : 1), 1)).toISOString().slice(0, 10);
+    const end = new Date(Date.UTC(2024, (i + 1) * (water ? 2 : 1), 1)).toISOString().slice(0, 10);
+    return { id: 'synthetic-' + i, providerId: 'synthetic', statementDate: end, periodStart: start, periodEnd: end,
+      total: 120 + i, items: [{ key: water ? 'water' : 'electric_delivery', amount: 120 + i }],
+      usage: [{ key: utility, amount: 200 + i }] };
+  });
+  const root = document.createElement('div'); fixture.replaceChildren(root);
+  const ctx = { D: { bills: [...bills].reverse(), providers: { synthetic: { name: '合成账单', category: water ? 'water' : 'energy' } } },
+    L: { prefs: { utility, utilityMetric: metric, utilityRange: '12' } }, S: { data: { servicePeriods: {} } },
+    nav: id => { fixture.textContent = id; }, setPref: (key, value) => { ctx.L.prefs[key] = value; },
+    render: () => { root.replaceChildren(); renderBills(root, ctx); }, openAdd: () => {} };
+  renderBills(root, ctx);
+  return { root, count, ctx };
+};
 const cases = [
+  ['全部账单可横向浏览，每屏仍显示 12 张，不受旧的 12 张偏好限制', async () => {
+    for (const [utility, metric] of [['electricity', 'total'], ['water', 'total'], ['electricity', 'daily']]) {
+      const { root, count } = billHistory(utility, metric);
+      await nextFrame(); await nextFrame();
+      for (const plot of root.querySelectorAll('.viz-scroll')) {
+        assert(plot.querySelectorAll('.viz-hit').length === count, '早期账单仍被截掉');
+        assert(plot.scrollWidth > plot.clientWidth, '图表没有可滚动的历史');
+        assert(plot.scrollLeft > 0, '没有从最新账单开始显示');
+        const band = +plot.querySelector('.viz-hit').getAttribute('width');
+        assert(Math.abs(band * 12 + 64 - plot.clientWidth) < 1, '每屏显示数量不是 12 张');
+        plot.scrollLeft = 0;
+        await nextFrame();
+        const first = plot.querySelector('.viz-hit').getBoundingClientRect(), viewport = plot.getBoundingClientRect();
+        assert(first.left >= viewport.left && first.right <= viewport.right, '最早账单无法滚动到可见区域');
+        assert(plot.querySelector('.viz-y-axis').getAttribute('transform') === 'translate(0,0)', '纵轴未随滚动保持可见');
+      }
+    }
+  }],
+  ['图表只显示当前设备的操作说明，数据解释放在折叠说明中', () => {
+    try {
+      for (const lang of LANGS) {
+        setLang(lang);
+        const { root } = billHistory();
+        const mouse = matchMedia('(hover: hover) and (pointer: fine)').matches;
+        const visible = el => getComputedStyle(el).display !== 'none';
+        for (const help of root.querySelectorAll('.viz-help')) {
+          assert([...help.querySelectorAll('.viz-mouse-help')].every(el => visible(el) === mouse), '鼠标说明显示条件不正确');
+          assert([...help.querySelectorAll('.viz-touch-help')].every(el => visible(el) !== mouse), '触控说明显示条件不正确');
+        }
+        assert(root.querySelectorAll('.viz-help').length === 2, '图表缺少操作说明');
+        const dataNote = t('u.dataNote', { mode: t('u.metric.daily') });
+        assert(root.querySelector('.field-guide').textContent.includes(dataNote), '数据说明未放在折叠区');
+        assert(!t('u.chartNote').includes(dataNote), '操作指南仍混入数据说明');
+      }
+    } finally { setLang('zh-Hans'); }
+  }],
+  ['账单详情图沿用统一说明，切换到表格时隐藏图表操作提示', () => {
+    const { ctx, count } = billHistory();
+    const card = providerHistory(ctx, 'synthetic'); fixture.replaceChildren(card);
+    const help = card.querySelector('.viz-help');
+    assert(help && help.textContent.includes(t('viz.touchScroll')), '详情图缺少历史滚动说明');
+    assert(card.querySelectorAll('.viz-hit').length === count, '详情图未显示全部账单');
+    card.querySelectorAll('.viz-toggle')[1].click();
+    assert(help.hidden, '表格模式仍显示图表操作提示');
+    card.querySelectorAll('.viz-toggle')[1].click();
+    assert(!help.hidden, '返回图表后操作提示未恢复');
+  }],
+  ['三种语言的浮层均使用新版提示，短历史不提示查看更多', () => {
+    try {
+      for (const lang of LANGS) {
+        setLang(lang);
+        const chart = mount('bar', { onSelect: () => {}, visibleCount: 12 });
+        tap(chart);
+        assert(visibleTip()?.querySelector('.viz-tip-hint')?.textContent === t('viz.tapAgain'), '新版浮层提示未显示');
+        assert(!chart.querySelector('.viz-help').textContent.includes(t('viz.touchScroll')), '短历史不应提示存在更多账单');
+      }
+    } finally { setLang('zh-Hans'); }
+  }],
   ['触屏首次点按保留提示，不立即打开账单', async () => {
     let selected = null;
     const chart = mount('bar', { onSelect: i => { selected = i; fixture.replaceChildren(); } });
@@ -241,6 +320,7 @@ document.getElementById('run').onclick = async () => {
       for (const hit of fixture.querySelectorAll('.viz-hit')) hit.dispatchEvent(new Event('blur'));
       const tip = document.querySelector('.viz-tip'); if (tip) tip.hidden = true;
       fixture.replaceChildren();
+      await nextFrame(); await nextFrame();
     }
     results.appendChild(item);
   }
@@ -248,10 +328,15 @@ document.getElementById('run').onclick = async () => {
   result.dataset.passed = String(passed); result.dataset.total = String(cases.length);
   button.disabled = false;
 };
-document.getElementById('preview').onclick = () => {
+document.getElementById('preview').onclick = async () => {
   results.hidden = true;
   const chart = mount('bar', { onSelect: i => fixture.replaceChildren(document.createTextNode('账单详情（测试）：' + options.labels[i])) });
+  await nextFrame(); await nextFrame();
   tap(chart);
+};
+document.getElementById('history').onclick = () => {
+  results.hidden = true;
+  billHistory();
 };
 </script>
 </html>
