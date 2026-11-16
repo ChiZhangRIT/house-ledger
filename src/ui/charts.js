@@ -61,14 +61,23 @@ export function niceTicks(min, max, count = 4) {
   return ticks;
 }
 
-// 提示框：整页共用一个
+// 提示框：整页共用一个，但挂在所属图表内，图表移除时一并清理。
 let tipEl = null;
-function tip() {
-  if (!tipEl) { tipEl = htmlEl('div', 'viz-tip', document.body); tipEl.setAttribute('role', 'status'); tipEl.hidden = true; }
+function tip(container) {
+  if (!tipEl) {
+    tipEl = htmlEl('div', 'viz-tip'); tipEl.setAttribute('role', 'status'); tipEl.hidden = true;
+    document.addEventListener('pointerdown', hideTip, true);
+    document.addEventListener('pointercancel', hideTip, true);
+    document.addEventListener('scroll', hideTip, true);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') hideTip(); });
+    window.addEventListener('blur', hideTip);
+    window.addEventListener('resize', hideTip);
+  }
+  if (tipEl.parentElement !== container) container.appendChild(tipEl);
   return tipEl;
 }
-function showTip(x, y, title, rows, total) {
-  const t = tip();
+function showTip(container, x, y, title, rows, total) {
+  const t = tip(container);
   t.replaceChildren();
   htmlEl('div', 'viz-tip-title', t, title);
   for (const r of rows) {
@@ -139,6 +148,7 @@ function frame(container, opts, drawPlot, legendKind) {
   const table = htmlEl('div', 'viz-table', container);
   table.hidden = true;
   toggle.onclick = () => {
+    hideTip();
     const on = table.hidden;
     table.hidden = !on; plot.hidden = on;
     if (scale) { scale.disabled = on; scaleNote.hidden = on || !limits; }
@@ -151,7 +161,7 @@ function frame(container, opts, drawPlot, legendKind) {
     if (w === lastW && !force) return;
     lastW = w;
     const scroll = plot.scrollLeft;
-    if (force) hideTip();
+    hideTip();
     domain = drawPlot(plot, w, limits);
     if (scale) {
       scale.textContent = t(limits ? 'viz.axisCustom' : 'viz.axisAuto');
@@ -261,7 +271,7 @@ export function columnChart(container, opts) {
         const rows = opts.series.filter(s => s.values[i] != null).map(s => ({ color: s.color, kind: 'bar', name: s.name, value: opts.format(s.values[i]) }));
         const total = opts.stacked && rows.length > 1 ? { name: opts.totalLabel || 'Total', value: opts.format(opts.series.reduce((a, s) => a + (s.values[i] || 0), 0)) } : null;
         const r = ev && ev.clientX != null ? { x: ev.clientX, y: ev.clientY } : (() => { const b = hit.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + 20 }; })();
-        showTip(r.x, r.y, opts.longLabels ? opts.longLabels[i] : opts.labels[i], rows.reverse(), total);
+        showTip(container, r.x, r.y, opts.longLabels ? opts.longLabels[i] : opts.labels[i], rows.reverse(), total);
       };
       hit.addEventListener('pointermove', show);
       hit.addEventListener('focus', () => show());
@@ -340,7 +350,7 @@ export function lineChart(container, opts) {
       const rows = opts.series.filter(s => s.values[cur] != null).map(s => ({ color: s.muted ? 'var(--viz-muted)' : s.color, kind: 'line', name: s.name, value: opts.format(s.values[cur]) }));
       const b = hit.getBoundingClientRect();
       const p = ev && ev.clientX != null ? { x: ev.clientX, y: ev.clientY } : { x: b.left + (X(cur) - PAD.left) * b.width / iw, y: b.top + 20 };
-      showTip(p.x, p.y, opts.longLabels ? opts.longLabels[cur] : opts.labels[cur], rows);
+      showTip(container, p.x, p.y, opts.longLabels ? opts.longLabels[cur] : opts.labels[cur], rows);
     };
     const idxAt = ev => { const b = hit.getBoundingClientRect(); return Math.round((ev.clientX - b.left) / b.width * (n - 1)); };
     hit.addEventListener('pointermove', ev => show(idxAt(ev), ev));

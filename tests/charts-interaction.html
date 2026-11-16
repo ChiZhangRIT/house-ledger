@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-Hans">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>图表提示浮层回归检查</title>
+<link rel="stylesheet" href="../styles.css">
+<main style="max-width:800px;margin:24px auto;padding:0 16px">
+  <h1>图表提示浮层回归检查</h1>
+  <p>仅使用合成数据，模拟触摸后没有 blur / pointerleave 事件的情况。</p>
+  <button class="btn primary" id="run" type="button">运行检查</button>
+  <p id="result" role="status">尚未运行</p>
+  <ol id="results"></ol>
+  <div id="fixture"></div>
+  <button class="btn" id="outside" type="button">图表外空白区域</button>
+</main>
+<script type="module">
+import { columnChart, lineChart } from '../src/ui/charts.js';
+
+const fixture = document.getElementById('fixture');
+const outside = document.getElementById('outside');
+const result = document.getElementById('result');
+const results = document.getElementById('results');
+const options = {
+  title: '合成账单费用', labels: ['2026/01', '2026/02'],
+  series: [{ name: '电力输配费', color: '#2a78d6', values: [100, 120] },
+    { name: '发电费', color: '#eda100', values: [20, 30] }],
+  stacked: true, format: n => '$' + n.toFixed(2), tickFormat: n => '$' + n,
+  tableLabel: '表格', totalLabel: '合计', height: 200,
+};
+const assert = (condition, message) => { if (!condition) throw new Error(message); };
+const visibleTip = () => document.querySelector('.viz-tip:not([hidden])');
+const mount = (kind = 'bar') => {
+  const chart = document.createElement('section'); chart.className = 'card';
+  fixture.replaceChildren(chart);
+  (kind === 'bar' ? columnChart : lineChart)(chart, options);
+  return chart;
+};
+const showTouch = chart => {
+  const hit = chart.querySelector('.viz-hit');
+  const rect = hit.getBoundingClientRect();
+  hit.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: 'touch', clientX: rect.left + rect.width / 2, clientY: rect.top + 40 }));
+  assert(visibleTip(), '触摸提示未显示');
+  return hit;
+};
+const closed = () => assert(!visibleTip(), '提示浮层仍停留在屏幕上');
+const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
+const cases = [
+  ['切换页面时不依赖 blur 或 pointerleave', () => {
+    const chart = mount(), hit = showTouch(chart); let left = false;
+    hit.addEventListener('blur', () => { left = true; });
+    hit.addEventListener('pointerleave', () => { left = true; });
+    fixture.replaceChildren(document.createTextNode('住户页面（测试）'));
+    assert(!left, '未复现触摸后无离开事件的条件'); closed();
+  }],
+  ['点击图表外关闭，随后仍可查看其他柱子', () => {
+    const chart = mount(); showTouch(chart);
+    outside.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' })); closed();
+    showTouch(chart);
+    assert(visibleTip().textContent.includes('$120.00'), '提示内容丢失');
+  }],
+  ['滚动图表时关闭（scroll 不冒泡）', () => {
+    const chart = mount(); showTouch(chart);
+    chart.querySelector('.viz-plot').dispatchEvent(new Event('scroll', { bubbles: false })); closed();
+  }],
+  ['取消触摸手势时关闭', () => {
+    const chart = mount(), hit = showTouch(chart);
+    hit.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, pointerType: 'touch' })); closed();
+  }],
+  ['Escape 关闭提示', () => {
+    const chart = mount(); showTouch(chart);
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); closed();
+  }],
+  ['图表切换表格时关闭', () => {
+    const chart = mount(); showTouch(chart);
+    [...chart.querySelectorAll('button')].find(button => button.textContent === '表格').click();
+    assert(!chart.querySelector('.viz-table').hidden, '未切换到表格'); closed();
+  }],
+  ['重新绘制同一图表时关闭', () => {
+    const chart = mount(); showTouch(chart); columnChart(chart, options); closed();
+  }],
+  ['图表尺寸变化重画时关闭', async () => {
+    const chart = mount(); chart.style.width = '300px';
+    await nextFrame(); await nextFrame(); showTouch(chart);
+    chart.style.width = '280px'; await nextFrame(); await nextFrame(); closed();
+  }],
+  ['折线图移除时同样清理提示', () => {
+    const chart = mount('line'); showTouch(chart); fixture.replaceChildren(); closed();
+  }],
+  ['键盘聚焦及方向键仍可查看不同账单', () => {
+    const chart = mount(), hits = chart.querySelectorAll('.viz-hit');
+    hits[0].focus(); assert(visibleTip()?.textContent.includes('2026/01'), '首张账单提示缺失');
+    hits[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    assert(document.activeElement === hits[1], '方向键未切换账单');
+    assert(visibleTip()?.textContent.includes('2026/02'), '下一张账单提示缺失');
+  }],
+  ['点击及 Enter 保留账单选择行为，跳转后关闭提示', () => {
+    for (const event of [new MouseEvent('click', { bubbles: true }), new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })]) {
+      const chart = mount(); let selected = null;
+      columnChart(chart, { ...options, onSelect: i => { selected = i; fixture.replaceChildren(document.createTextNode('账单详情（测试）')); } });
+      showTouch(chart); chart.querySelectorAll('.viz-hit')[1].dispatchEvent(event);
+      assert(selected === 1, '未选中对应账单'); closed();
+    }
+  }],
+];
+document.getElementById('run').onclick = async () => {
+  const button = document.getElementById('run'); button.disabled = true;
+  results.replaceChildren(); let passed = 0;
+  for (const [name, check] of cases) {
+    const item = document.createElement('li');
+    try { await check(); passed++; item.textContent = '通过：' + name; }
+    catch (error) { item.textContent = '失败：' + name + ' — ' + error.message; }
+    finally {
+      // 测试之间主动触发旧版也支持的清理事件，避免失败互相影响。
+      for (const hit of fixture.querySelectorAll('.viz-hit')) hit.dispatchEvent(new Event('blur'));
+      const tip = document.querySelector('.viz-tip'); if (tip) tip.hidden = true;
+      fixture.replaceChildren();
+    }
+    results.appendChild(item);
+  }
+  result.textContent = passed + ' / ' + cases.length + ' 项通过';
+  result.dataset.passed = String(passed); result.dataset.total = String(cases.length);
+  button.disabled = false;
+};
+</script>
+</html>
