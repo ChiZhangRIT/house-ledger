@@ -62,15 +62,14 @@ export function niceTicks(min, max, count = 4) {
 }
 
 // 提示框：整页共用一个，但挂在所属图表内，图表移除时一并清理。
-let tipEl = null, previewHit = null;
-const hasHoverMouse = () => window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+let tipEl = null;
 function tip(container) {
   if (!tipEl) {
     tipEl = htmlEl('div', 'viz-tip'); tipEl.setAttribute('role', 'status'); tipEl.hidden = true;
-    const outside = e => { if (!e.target.closest?.('.viz-hit')) hideTip(); };
+    const outside = e => { if (!e.target.closest?.('.viz-hit, .viz-tip')) hideTip(); };
     document.addEventListener('pointerdown', outside, true);
     document.addEventListener('pointercancel', hideTip, true);
-    document.addEventListener('scroll', hideTip, true);
+    document.addEventListener('scroll', e => { if (!tipEl.contains(e.target)) hideTip(); }, true);
     document.addEventListener('keydown', e => { if (e.key === 'Escape' || e.key === 'Tab') hideTip(); });
     window.addEventListener('blur', hideTip);
     window.addEventListener('resize', hideTip);
@@ -78,25 +77,32 @@ function tip(container) {
   if (tipEl.parentElement !== container) container.appendChild(tipEl);
   return tipEl;
 }
-function showTip(container, x, y, title, rows, total, hint) {
-  const t = tip(container);
-  t.replaceChildren();
-  htmlEl('div', 'viz-tip-title', t, title);
+function showTip(container, x, y, title, rows, total, { onSelect, anchor } = {}) {
+  const el = tip(container);
+  el.replaceChildren();
+  el.setAttribute('role', onSelect ? 'group' : 'status');
+  if (onSelect) el.setAttribute('aria-label', title); else el.removeAttribute('aria-label');
+  htmlEl('div', 'viz-tip-title', el, title);
   for (const r of rows) {
-    const row = htmlEl('div', 'viz-tip-row', t);
+    const row = htmlEl('div', 'viz-tip-row', el);
     const key = htmlEl('span', 'viz-key ' + (r.kind || 'line'), row);
     key.style.setProperty('--k', r.color);
     htmlEl('strong', null, row, r.value);
     htmlEl('span', 'viz-tip-name', row, r.name);
   }
-  if (total) { const row = htmlEl('div', 'viz-tip-row viz-tip-total', t); htmlEl('strong', null, row, total.value); htmlEl('span', 'viz-tip-name', row, total.name); }
-  if (hint) htmlEl('div', 'viz-tip-hint', t, hint);
-  t.hidden = false;
-  const w = t.offsetWidth, h = t.offsetHeight, vw = window.innerWidth, vh = window.innerHeight;
-  t.style.left = Math.max(8, Math.min(vw - w - 8, x + 14)) + 'px';
-  t.style.top = Math.max(8, Math.min(vh - h - 8, y - h - 12 < 8 ? y + 16 : y - h - 12)) + 'px';
+  if (total) { const row = htmlEl('div', 'viz-tip-row viz-tip-total', el); htmlEl('strong', null, row, total.value); htmlEl('span', 'viz-tip-name', row, total.name); }
+  if (onSelect) {
+    const open = htmlEl('button', 'viz-open', el, t('viz.openBill'));
+    open.type = 'button';
+    open.onclick = () => { if (open.isConnected && !el.hidden) { hideTip(); onSelect(); } };
+  }
+  el.hidden = false;
+  const w = el.offsetWidth, h = el.offsetHeight, vw = window.innerWidth, vh = window.innerHeight;
+  const rect = anchor?.getBoundingClientRect();
+  el.style.left = Math.max(8, Math.min(vw - w - 8, rect ? rect.right - w - 8 : x + 14)) + 'px';
+  el.style.top = Math.max(8, Math.min(vh - h - 8, rect ? rect.top - h - 8 : y - h - 12 < 8 ? y + 16 : y - h - 12)) + 'px';
 }
-const hideTip = () => { if (tipEl) tipEl.hidden = true; previewHit = null; };
+const hideTip = () => { if (tipEl) tipEl.hidden = true; };
 
 /** 图表外壳：标题、图例、切换表格、尺寸变化时重画 */
 function frame(container, opts, drawPlot, legendKind) {
@@ -245,8 +251,7 @@ export function columnChart(container, opts) {
       : Math.max(3, Math.min(24, band - 2, opts.stacked ? band * 0.62 : band * 0.8 / opts.series.length));
     const labelEvery = opts.visibleCount ? 1 : Math.max(1, Math.ceil(n / Math.max(1, Math.floor(iw / 46))));
     const groups = [];
-    let gesture = null;
-    const previewing = hit => previewHit === hit && tipEl?.isConnected && !tipEl.hidden;
+    let cancelled = false;
     for (let i = 0; i < n; i++) {
       const cx = left + band * i + band / 2;
       const g = svgEl('g', { 'clip-path': `url(#${clipId})`, class: 'viz-col' + (opts.selected === i ? ' sel' : '') + (opts.partial && opts.partial[i] ? ' partial' : '') }, svg);
@@ -277,38 +282,23 @@ export function columnChart(container, opts) {
       // 命中区域：整条竖带，比柱子宽
       const hit = svgEl('rect', { x: left + band * i, y: PAD.top, width: band, height: ih, class: 'viz-hit', tabindex: '0', role: 'button',
         'aria-label': `${opts.longLabels ? opts.longLabels[i] : opts.labels[i]}` }, svg);
-      const show = (ev, touch = ev?.pointerType === 'touch' || ev?.pointerType === 'pen') => {
+      const show = () => {
         groups.forEach(gg => gg.classList.remove('hover')); g.classList.add('hover');
         const rows = opts.series.filter(s => s.values[i] != null).map(s => ({ color: s.color, kind: 'bar', name: s.name, value: opts.format(s.values[i]) }));
         const total = opts.stacked && rows.length > 1 ? { name: opts.totalLabel || 'Total', value: opts.format(opts.series.reduce((a, s) => a + (s.values[i] || 0), 0)) } : null;
-        const r = ev && ev.clientX != null ? { x: ev.clientX, y: ev.clientY } : (() => { const b = hit.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + 20 }; })();
-        showTip(container, r.x, r.y, opts.longLabels ? opts.longLabels[i] : opts.labels[i], rows.reverse(), total,
-          touch && opts.onSelect ? t('viz.tapAgain') : null);
+        showTip(container, 0, 0, opts.longLabels ? opts.longLabels[i] : opts.labels[i], rows.reverse(), total,
+          { anchor: plot, onSelect: opts.onSelect ? () => opts.onSelect(i) : null });
       };
-      // 在聚焦及兼容 click 之前记录预览状态；同一手势只消费一次 click。
-      const begin = e => { gesture = { hit, confirmed: previewing(hit),
-        touch: e.type === 'touchstart' || e.pointerType === 'touch' || e.pointerType === 'pen', handled: false }; };
+      const begin = () => { cancelled = false; };
       hit.addEventListener('pointerdown', begin);
       hit.addEventListener('touchstart', begin, { passive: true });
-      hit.addEventListener('pointercancel', () => { if (gesture) gesture.handled = true; });
-      hit.addEventListener('pointermove', show);
-      hit.addEventListener('focus', () => show());
-      hit.addEventListener('pointerleave', e => {
-        if (e.pointerType === 'mouse' && !gesture?.touch && hasHoverMouse()) { g.classList.remove('hover'); hideTip(); }
-      });
-      hit.addEventListener('click', e => {
-        if (!hit.isConnected) return;
-        if (gesture?.handled) return;
-        const confirmed = gesture ? gesture.hit === hit && gesture.confirmed : previewing(hit);
-        if (gesture) gesture.handled = true;
-        const mouse = hasHoverMouse() && !gesture?.touch && e.pointerType !== 'touch' && e.pointerType !== 'pen';
-        if (opts.onSelect && (mouse || confirmed && previewing(hit))) { hideTip(); opts.onSelect(i); }
-        else { show(e, true); previewHit = hit; }
-      });
+      hit.addEventListener('pointercancel', () => { cancelled = true; });
+      hit.addEventListener('focus', show);
+      hit.addEventListener('click', () => { if (hit.isConnected && !cancelled) show(); });
       hit.addEventListener('keydown', e => {
         const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
         if (d && svg.querySelectorAll('.viz-hit')[i + d]) { e.preventDefault(); svg.querySelectorAll('.viz-hit')[i + d].focus(); }
-        if ((e.key === 'Enter' || e.key === ' ') && opts.onSelect) { e.preventDefault(); hideTip(); opts.onSelect(i); }
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); show(); tipEl.querySelector('.viz-open')?.focus(); }
       });
     }
     if (opts.visibleCount) {

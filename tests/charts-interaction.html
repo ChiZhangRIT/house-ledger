@@ -43,7 +43,8 @@ const mount = (kind = 'bar', extra = {}) => {
 const showTouch = chart => {
   const hit = chart.querySelector('.viz-hit');
   const rect = hit.getBoundingClientRect();
-  hit.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: 'touch', clientX: rect.left + rect.width / 2, clientY: rect.top + 40 }));
+  if (chart.querySelector('.viz-col')) tap(chart);
+  else hit.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: 'touch', clientX: rect.left + rect.width / 2, clientY: rect.top + 40 }));
   assert(visibleTip(), '触摸提示未显示');
   return hit;
 };
@@ -133,7 +134,7 @@ const cases = [
         setLang(lang);
         const chart = mount('bar', { onSelect: () => {}, visibleCount: 12 });
         tap(chart);
-        assert(visibleTip()?.querySelector('.viz-tip-hint')?.textContent === t('viz.tapAgain'), '新版浮层提示未显示');
+        assert(visibleTip()?.querySelector('.viz-open')?.textContent === t('viz.openBill'), '查看账单入口未显示');
         assert(!chart.querySelector('.viz-help').textContent.includes(t('viz.touchScroll')), '短历史不应提示存在更多账单');
       }
     } finally { setLang('zh-Hans'); }
@@ -145,13 +146,16 @@ const cases = [
     assert(selected === null, '首次点按就打开了账单');
     assert(visibleTip()?.textContent.includes('$120.00'), '手指离开后提示未保留');
   }],
-  ['点其他柱子只切换预览，再点同一柱子才打开', () => {
+  ['重复点按柱子只切换预览，点击浮层入口才打开对应账单', () => {
     let selected = null;
     const chart = mount('bar', { onSelect: i => { selected = i; fixture.replaceChildren(); } });
     tap(chart, 0); tap(chart, 1);
     assert(selected === null && visibleTip()?.textContent.includes('2026/02'), '切换柱子时意外打开账单');
-    assert(!visibleTip().querySelector('button'), '不应要求改用浮层按钮');
-    tap(chart, 1); assert(selected === 1, '第二次点按未打开对应账单'); closed();
+    tap(chart, 1); assert(selected === null, '重复点按柱子仍会打开账单');
+    const open = visibleTip().querySelector('.viz-open');
+    open.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' }));
+    assert(visibleTip(), '点击浮层入口前被当成外部点击关闭');
+    open.click(); assert(selected === 1, '浮层入口未打开当前预览的账单'); closed();
   }],
   ['点空白、滚动或取消手势后，同一柱子重新从提示开始', () => {
     for (const dismiss of [() => outside.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' })),
@@ -175,7 +179,8 @@ const cases = [
       hit.dispatchEvent(event);
       assert(selected === null && visibleTip(), '点击类型判断导致直接跳转');
       hit.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'mouse', bubbles: true }));
-      hit.dispatchEvent(event); assert(selected === 0, '第二个独立点按未打开账单'); closed();
+      hit.dispatchEvent(event); assert(selected === null, '再次点击柱子直接打开账单');
+      visibleTip().querySelector('.viz-open').click(); assert(selected === 0, '浮层入口未打开对应账单'); closed();
     }
   })],
   ['单次触摸后的重复兼容点击不会打开账单', () => {
@@ -184,7 +189,8 @@ const cases = [
     tap(chart, 0, true);
     chart.querySelector('.viz-hit').dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
     assert(selected === null && visibleTip(), '兼容点击重复触发了跳转');
-    tap(chart, 0, true); assert(selected === 0, '下一次独立点按未打开账单');
+    tap(chart, 0, true); assert(selected === null, '再次点按柱子仍会跳转');
+    visibleTip().querySelector('.viz-open').click(); assert(selected === 0, '浮层入口未打开账单');
   }],
   ['触摸开始事件可单独识别兼容点击，无需 pointerType', () => withHoverMouse(true, () => {
     let selected = null;
@@ -195,16 +201,18 @@ const cases = [
     assert(selected === null && visibleTip(), '兼容触摸首点直接跳转');
     hit.dispatchEvent(new Event('touchstart', { bubbles: true }));
     hit.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
-    assert(selected === 0, '兼容触摸第二次点按未打开'); closed();
+    assert(selected === null, '兼容触摸再次点按直接跳转');
+    visibleTip().querySelector('.viz-open').click(); assert(selected === 0, '浮层入口未打开账单'); closed();
   })],
   ['首次点按前的指针移动与聚焦不会提前确认预览', () => {
     let selected = null;
     const chart = mount('bar', { onSelect: i => { selected = i; fixture.replaceChildren(); } });
     showTouch(chart).focus(); tap(chart);
     assert(selected === null && visibleTip(), '自动聚焦被误算为第一次点按');
-    tap(chart); assert(selected === 0, '第二次点按未打开'); closed();
+    tap(chart); assert(selected === null, '再次点按柱子直接跳转');
+    visibleTip().querySelector('.viz-open').click(); assert(selected === 0, '浮层入口未打开账单'); closed();
   }],
-  ['同次手势的 pointerdown、touchstart 和重复 click 只处理一次', () => {
+  ['同次手势的 pointerdown、touchstart 和重复 click 始终只预览', () => {
     let selected = null;
     const chart = mount('bar', { onSelect: i => { selected = i; fixture.replaceChildren(); } });
     const hit = chart.querySelector('.viz-hit');
@@ -213,15 +221,15 @@ const cases = [
       hit.dispatchEvent(new Event('touchstart', { bubbles: true }));
       hit.dispatchEvent(new PointerEvent('click', { bubbles: true, pointerType: 'touch' }));
       hit.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
-      assert(gesture === 0 ? selected === null && visibleTip() : selected === 0, '手势计数错误');
+      assert(selected === null && visibleTip(), '重复事件导致自动跳转');
     }
-    closed();
+    visibleTip().querySelector('.viz-open').click(); assert(selected === 0, '浮层入口未打开账单'); closed();
   }],
-  ['同次触摸的兼容点击换了命中柱子，也不会打开或切换账单', () => withHoverMouse(true, () => {
+  ['兼容点击换了命中柱子，也只会更新预览而不会打开账单', () => withHoverMouse(true, () => {
     let selected = null;
     const chart = mount('bar', { onSelect: i => { selected = i; } }); tap(chart);
     chart.querySelectorAll('.viz-hit')[1].dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 0 }));
-    assert(selected === null && visibleTip()?.textContent.includes('2026/01'), '兼容点击被当成另一根柱子的新点按');
+    assert(selected === null && visibleTip()?.textContent.includes('2026/02'), '兼容点击意外打开账单');
   })],
   ['第二次点按中取消手势，不打开账单或重新弹出提示', () => {
     let selected = null;
@@ -235,9 +243,10 @@ const cases = [
   ['没有详情链接的柱子也能在手指离开后保留提示', () => {
     const chart = mount(); tap(chart);
     assert(visibleTip()?.textContent.includes('$120.00'), '触屏提示过早消失');
+    assert(!visibleTip().querySelector('.viz-open'), '没有详情的图表不应显示入口');
   }],
   ['切换页面时不依赖 blur 或 pointerleave', () => {
-    const chart = mount(), hit = showTouch(chart); let left = false;
+    const chart = mount(), hit = showTouch(chart); hit.blur(); let left = false;
     hit.addEventListener('blur', () => { left = true; });
     hit.addEventListener('pointerleave', () => { left = true; });
     fixture.replaceChildren(document.createTextNode('住户页面（测试）'));
@@ -270,11 +279,11 @@ const cases = [
     const chart = mount(); showTouch(chart);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); closed();
   }],
-  ['Tab 离开图表时关闭预览并清除二次点按确认', () => {
+  ['Tab 离开图表时关闭预览', () => {
     let selected = null;
     const chart = mount('bar', { onSelect: i => { selected = i; } }); tap(chart);
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true })); closed();
-    tap(chart); assert(selected === null && visibleTip(), 'Tab 关闭后仍误算为第二次点按');
+    tap(chart); assert(selected === null && visibleTip(), 'Tab 关闭后意外打开账单');
   }],
   ['图表切换表格时关闭', () => {
     const chart = mount(); showTouch(chart);
@@ -299,14 +308,44 @@ const cases = [
     assert(document.activeElement === hits[1], '方向键未切换账单');
     assert(visibleTip()?.textContent.includes('2026/02'), '下一张账单提示缺失');
   }],
-  ['桌面鼠标点击及键盘 Enter 仍直接打开账单', () => withHoverMouse(true, () => {
+  ['桌面鼠标与键盘先预览，再从浮层入口打开账单', () => withHoverMouse(true, () => {
     for (const event of [new MouseEvent('click', { bubbles: true }), new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })]) {
       const chart = mount(); let selected = null;
       columnChart(chart, { ...options, onSelect: i => { selected = i; fixture.replaceChildren(document.createTextNode('账单详情（测试）')); } });
       showTouch(chart); chart.querySelectorAll('.viz-hit')[1].dispatchEvent(event);
-      assert(selected === 1, '未直接打开对应账单'); closed();
+      assert(selected === null, '柱子仍直接打开账单');
+      const open = visibleTip().querySelector('.viz-open');
+      if (event.type === 'keydown') assert(document.activeElement === open, '键盘未聚焦浮层入口');
+      open.click(); assert(selected === 1, '浮层未打开对应账单'); closed();
     }
   })],
+  ['浮层固定在绘图区上缘，不跟随柱子或指针移动', () => {
+    const chart = mount('bar', { onSelect: () => {} }); tap(chart);
+    const tip = visibleTip(), first = tip.getBoundingClientRect(), plot = chart.querySelector('.viz-plot').getBoundingClientRect();
+    assert(first.top <= plot.top + 8, '浮层未放在绘图区上方');
+    tap(chart, 1);
+    const second = visibleTip().getBoundingClientRect();
+    assert(Math.abs(first.left - second.left) < 1 && Math.abs(first.top - second.top) < 1, '切换柱子时浮层仍跟随点击位置');
+    chart.querySelector('.viz-hit').dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: 'mouse', clientX: 20, clientY: 600 }));
+    assert(visibleTip().textContent.includes('2026/02'), '移动指针意外切换了账单预览');
+    chart.querySelectorAll('.viz-hit')[1].dispatchEvent(new PointerEvent('pointerleave', { pointerType: 'mouse' }));
+    assert(visibleTip(), '鼠标还未移到入口，浮层就关闭了');
+    assert(first.left >= 0 && first.right <= innerWidth && first.top >= 0 && first.bottom <= innerHeight, '浮层超出屏幕');
+  }],
+  ['滚动浮层本身不关闭，滚动图表仍关闭', () => {
+    const chart = mount('bar', { onSelect: () => {} }); tap(chart);
+    visibleTip().dispatchEvent(new Event('scroll'));
+    assert(visibleTip(), '查看浮层内容时被关闭');
+    chart.querySelector('.viz-plot').dispatchEvent(new Event('scroll')); closed();
+  }],
+  ['被切换或删除的旧浮层入口不能再打开旧账单', () => {
+    let selected = null;
+    const chart = mount('bar', { onSelect: i => { selected = i; } }); tap(chart);
+    const old = visibleTip().querySelector('.viz-open'); tap(chart, 1); old.click();
+    assert(selected === null, '旧入口仍能打开旧账单');
+    const current = visibleTip().querySelector('.viz-open'); fixture.replaceChildren(); current.click();
+    assert(selected === null, '离开页面后仍能打开账单'); closed();
+  }],
 ];
 document.getElementById('run').onclick = async () => {
   const button = document.getElementById('run'); button.disabled = true;

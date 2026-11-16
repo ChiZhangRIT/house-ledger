@@ -428,8 +428,8 @@ details.card summary { cursor: pointer; font-weight: 600; }
 .viz-tick { font-size: 11px; fill: var(--ink-3); font-variant-numeric: tabular-nums; }
 .viz-col .viz-bar { transition: opacity .12s; }
 .viz-col.partial .viz-bar { opacity: .42; }
-.viz-plot svg:hover .viz-col:not(.hover) .viz-bar { opacity: .55; }
-.viz-plot svg:hover .viz-col.partial:not(.hover) .viz-bar { opacity: .3; }
+.viz-plot svg:hover:has(.viz-col.hover) .viz-col:not(.hover) .viz-bar { opacity: .55; }
+.viz-plot svg:hover:has(.viz-col.hover) .viz-col.partial:not(.hover) .viz-bar { opacity: .3; }
 .viz-hit { fill: transparent; cursor: pointer; outline: none; touch-action: manipulation; }
 .viz-hit:focus-visible { stroke: var(--accent); stroke-width: 2; }
 .viz-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
@@ -438,9 +438,9 @@ details.card summary { cursor: pointer; font-weight: 600; }
 .viz-dot { stroke: var(--surface); stroke-width: 2; }
 .viz-cross { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; }
 .viz-spark { display: block; }
-.viz-tip { position: fixed; z-index: 100; pointer-events: none; min-width: 150px; max-width: 280px; padding: 8px 10px; border-radius: 9px; background: var(--surface); border: 1px solid var(--line-2); box-shadow: 0 6px 24px rgba(0, 0, 0, .18); font-size: 12.5px; }
+.viz-tip { position: fixed; z-index: 100; pointer-events: auto; min-width: 150px; max-width: min(280px, calc(100vw - 16px)); max-height: calc(100dvh - 16px); overflow: auto; padding: 8px 10px; border-radius: 9px; background: var(--surface); border: 1px solid var(--line-2); box-shadow: 0 6px 24px rgba(0, 0, 0, .18); font-size: 12.5px; }
 .viz-tip-title { font-weight: 650; margin-bottom: 4px; }
-.viz-tip-hint { margin-top: 6px; color: var(--accent); }
+.viz-open { display: block; margin: 6px 0 0 auto; padding: 4px 8px; min-height: 44px; border: 0; border-radius: 6px; background: none; color: var(--accent); font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
 .viz-mouse-help { display: none; }
 @media (hover: hover) and (pointer: fine) {
   .viz-touch-help { display: none; }
