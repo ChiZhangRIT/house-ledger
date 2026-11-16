@@ -8,6 +8,7 @@
   <h1>图表提示浮层回归检查</h1>
   <p>仅使用合成数据，模拟触摸后没有 blur / pointerleave 事件的情况。</p>
   <button class="btn primary" id="run" type="button">运行检查</button>
+  <button class="btn" id="preview" type="button">预览首次触屏点按</button>
   <p id="result" role="status">尚未运行</p>
   <ol id="results"></ol>
   <div id="fixture"></div>
@@ -29,10 +30,10 @@ const options = {
 };
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 const visibleTip = () => document.querySelector('.viz-tip:not([hidden])');
-const mount = (kind = 'bar') => {
+const mount = (kind = 'bar', extra = {}) => {
   const chart = document.createElement('section'); chart.className = 'card';
   fixture.replaceChildren(chart);
-  (kind === 'bar' ? columnChart : lineChart)(chart, options);
+  (kind === 'bar' ? columnChart : lineChart)(chart, { ...options, ...extra });
   return chart;
 };
 const showTouch = chart => {
@@ -44,7 +45,49 @@ const showTouch = chart => {
 };
 const closed = () => assert(!visibleTip(), '提示浮层仍停留在屏幕上');
 const nextFrame = () => new Promise(resolve => requestAnimationFrame(resolve));
+const tap = (chart, index = 0, legacyClick = false) => {
+  const hit = chart.querySelectorAll('.viz-hit')[index], rect = hit.getBoundingClientRect();
+  const event = { bubbles: true, pointerType: 'touch', pointerId: 1, isPrimary: true, clientX: rect.left + rect.width / 2, clientY: rect.top + 40, detail: 1 };
+  hit.dispatchEvent(new PointerEvent('pointerdown', event)); hit.focus();
+  hit.dispatchEvent(new PointerEvent('pointerup', event));
+  hit.dispatchEvent(new PointerEvent('pointerleave', { ...event, bubbles: false }));
+  hit.dispatchEvent(legacyClick ? new MouseEvent('click', event) : new PointerEvent('click', event));
+};
 const cases = [
+  ['触屏首次点按保留提示，不立即打开账单', async () => {
+    let selected = null;
+    const chart = mount('bar', { onSelect: i => { selected = i; fixture.replaceChildren(); } });
+    tap(chart); await nextFrame(); await nextFrame();
+    assert(selected === null, '首次点按就打开了账单');
+    assert(visibleTip()?.textContent.includes('$120.00'), '手指离开后提示未保留');
+  }],
+  ['点不同柱子切换提示，再点同一柱子才打开账单', () => {
+    let selected = null;
+    const chart = mount('bar', { onSelect: i => { selected = i; fixture.replaceChildren(); } });
+    tap(chart, 0); tap(chart, 1);
+    assert(selected === null && visibleTip()?.textContent.includes('2026/02'), '切换柱子时意外打开账单');
+    tap(chart, 1); assert(selected === 1, '再次点按未打开对应账单'); closed();
+  }],
+  ['点空白、滚动或取消手势后，同一柱子重新从提示开始', () => {
+    for (const dismiss of [() => outside.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' })),
+      chart => chart.querySelector('.viz-plot').dispatchEvent(new Event('scroll')),
+      chart => chart.querySelector('.viz-hit').dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, pointerType: 'touch' }))]) {
+      let selected = null;
+      const chart = mount('bar', { onSelect: i => { selected = i; } });
+      tap(chart); dismiss(chart); closed(); tap(chart);
+      assert(selected === null && visibleTip(), '关闭后首次点按仍直接打开账单');
+    }
+  }],
+  ['兼容触屏 pointerdown 后的 MouseEvent click', () => {
+    let selected = null;
+    const chart = mount('bar', { onSelect: i => { selected = i; fixture.replaceChildren(); } });
+    tap(chart, 0, true); assert(selected === null && visibleTip(), '兼容点击意外打开账单');
+    tap(chart, 0, true); assert(selected === 0, '再次点按未打开账单'); closed();
+  }],
+  ['没有详情链接的柱子也能在手指离开后保留提示', () => {
+    const chart = mount(); tap(chart);
+    assert(visibleTip()?.textContent.includes('$120.00'), '触屏提示过早消失');
+  }],
   ['切换页面时不依赖 blur 或 pointerleave', () => {
     const chart = mount(), hit = showTouch(chart); let left = false;
     hit.addEventListener('blur', () => { left = true; });
@@ -104,7 +147,7 @@ const cases = [
 ];
 document.getElementById('run').onclick = async () => {
   const button = document.getElementById('run'); button.disabled = true;
-  results.replaceChildren(); let passed = 0;
+  results.hidden = false; results.replaceChildren(); let passed = 0;
   for (const [name, check] of cases) {
     const item = document.createElement('li');
     try { await check(); passed++; item.textContent = '通过：' + name; }
@@ -120,6 +163,11 @@ document.getElementById('run').onclick = async () => {
   result.textContent = passed + ' / ' + cases.length + ' 项通过';
   result.dataset.passed = String(passed); result.dataset.total = String(cases.length);
   button.disabled = false;
+};
+document.getElementById('preview').onclick = () => {
+  results.hidden = true;
+  const chart = mount('bar', { onSelect: i => fixture.replaceChildren(document.createTextNode('账单详情（测试）：' + options.labels[i])) });
+  tap(chart);
 };
 </script>
 </html>

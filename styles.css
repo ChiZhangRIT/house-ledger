@@ -430,7 +430,7 @@ details.card summary { cursor: pointer; font-weight: 600; }
 .viz-col.partial .viz-bar { opacity: .42; }
 .viz-plot svg:hover .viz-col:not(.hover) .viz-bar { opacity: .55; }
 .viz-plot svg:hover .viz-col.partial:not(.hover) .viz-bar { opacity: .3; }
-.viz-hit { fill: transparent; cursor: pointer; outline: none; }
+.viz-hit { fill: transparent; cursor: pointer; outline: none; touch-action: manipulation; }
 .viz-hit:focus-visible { stroke: var(--accent); stroke-width: 2; }
 .viz-line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .viz-line.thin { stroke-width: 1.5; }
@@ -440,6 +440,7 @@ details.card summary { cursor: pointer; font-weight: 600; }
 .viz-spark { display: block; }
 .viz-tip { position: fixed; z-index: 100; pointer-events: none; min-width: 150px; max-width: 280px; padding: 8px 10px; border-radius: 9px; background: var(--surface); border: 1px solid var(--line-2); box-shadow: 0 6px 24px rgba(0, 0, 0, .18); font-size: 12.5px; }
 .viz-tip-title { font-weight: 650; margin-bottom: 4px; }
+.viz-tip-hint { margin-top: 6px; color: var(--accent); }
 .viz-tip-row { display: flex; align-items: center; gap: 7px; padding: 1px 0; }
 .viz-tip-row strong { font-variant-numeric: tabular-nums; min-width: 64px; text-align: right; }
 .viz-tip-name { color: var(--ink-2); }
