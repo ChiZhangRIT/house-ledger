@@ -340,7 +340,7 @@ Object.assign(zh, {
   'pdf.loading': '正在打开原始 PDF…', 'pdf.previous': '上一页', 'pdf.next': '下一页', 'pdf.page': v => `第 ${v.n}/${v.total} 页`, 'pdf.download': '下载原文件', 'pdf.close': '关闭', 'pdf.readFail': 'PDF 无法预览，可下载原文件后打开。',
   'u.electricityTab': '电力', 'u.electricityNote': '电力费用 = 输配费 + 发电费。两项对应同一份用电量（kWh），用量只计一次；整期费用图按两项堆叠。', 'u.electricityCostChart': '电力费用构成：输配＋发电（USD）',
   'u.allHistory': v => `全部 ${v.n} 张 · 出账日期 ${v.from} 至 ${v.to}；不受上方图表范围影响。`,
-  'bills.providerCost': '{name} 历史费用构成（USD）', 'bills.providerCostNote': '全部 {n} 张账单，每屏最多显示 12 张；仅堆叠同一张账单的费用，负数为抵扣。向左查看早期账单，点击柱子查看记录。',
+  'bills.providerCost': '{name} 历史费用构成（USD）', 'bills.providerCostNote': '全部 {n} 张账单，每屏最多显示 12 张；仅堆叠同一张账单的费用，负数为抵扣。向左查看早期账单。手机首次点按柱子预览，再点同一柱子打开账单；鼠标悬停预览、点击打开。',
   'item.electricity': '电力费用', 'item.unallocated': '未分项金额', 'bill.calendar': '到期日历提醒', 'bill.calendarHelp': '下载日历文件，手动加入系统日历；到期前 3 天提醒，不会自动写入日历。',
   'bill.calendarPast': '到期日已过，无需创建将来的到期提醒。', 'bill.calendarPaid': '已标记缴清，无需创建到期提醒。', 'bill.calendarNoDate': '账单尚未填写到期日。',
 
@@ -394,7 +394,7 @@ Object.assign(en, {
   'pdf.loading': 'Opening original PDF…', 'pdf.previous': 'Previous page', 'pdf.next': 'Next page', 'pdf.page': v => `Page ${v.n}/${v.total}`, 'pdf.download': 'Download original', 'pdf.close': 'Close', 'pdf.readFail': 'Preview unavailable. Download the original file to open it.',
   'u.electricityTab': 'Electricity', 'u.electricityNote': 'Electricity cost = delivery + generation. Both relate to the same kWh consumption, counted once. Bill-total costs stack delivery and generation.', 'u.electricityCostChart': 'Electricity cost: delivery + generation (USD)',
   'u.allHistory': v => `All ${v.n} ${plural(v.n, 'bill', 'bills')} · issued ${v.from} to ${v.to}; independent of the chart range.`,
-  'bills.providerCost': '{name} historical cost breakdown (USD)', 'bills.providerCostNote': v => `All ${v.n} ${plural(v.n, 'bill', 'bills')}, up to 12 visible at once. Only costs within each bill are stacked; negative values are credits. Scroll left for older bills and select a bar to open its record.`,
+  'bills.providerCost': '{name} historical cost breakdown (USD)', 'bills.providerCostNote': v => `All ${v.n} ${plural(v.n, 'bill', 'bills')}, up to 12 visible at once. Only costs within each bill are stacked; negative values are credits. Scroll left for older bills. On touchscreens, tap a bar to preview, then tap the same bar again to open its bill. With a mouse, hover to preview and click to open.`,
   'item.electricity': 'Electricity cost', 'item.unallocated': 'Unallocated amount', 'bill.calendar': 'Due-date reminder', 'bill.calendarHelp': 'Download a calendar file and import it into your calendar for a reminder 3 days before the due date. Nothing is added automatically.',
   'bill.calendarPast': 'The due date has passed.', 'bill.calendarPaid': 'This bill is marked paid.', 'bill.calendarNoDate': 'No due date is recorded.',
 

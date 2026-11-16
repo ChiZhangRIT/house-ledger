@@ -637,7 +637,7 @@ export const zhTW = {
   'u.electricityCostChart': '電力費用構成：輸配＋發電（USD）',
   'u.allHistory': v => `共 ${v.n} 筆 · 帳單日期 ${v.from} 至 ${v.to}；不受上方圖表範圍影響。`,
   'bills.providerCost': '{name} 歷史費用構成（USD）',
-  'bills.providerCostNote': '全部 {n} 張帳單，每個畫面最多顯示 12 張；僅堆疊同一張帳單的費用，負數為折抵。向左檢視早期帳單，點選長條檢視紀錄。',
+  'bills.providerCostNote': '全部 {n} 張帳單，每個畫面最多顯示 12 張；僅堆疊同一張帳單的費用，負數為折抵。向左檢視早期帳單。手機首次點選長條預覽，再點同一長條開啟帳單；滑鼠移入預覽、點選開啟。',
   'item.electricity': '電力費用',
   'item.unallocated': '未分項金額',
   'bill.calendarHelp': '下載行事曆檔案，手動加入系統行事曆；到期前 3 天提醒，不會自動寫入行事曆。',

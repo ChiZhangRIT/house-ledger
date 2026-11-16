@@ -62,14 +62,16 @@ export function niceTicks(min, max, count = 4) {
 }
 
 // 提示框：整页共用一个，但挂在所属图表内，图表移除时一并清理。
-let tipEl = null, touchHit = null;
+let tipEl = null, previewHit = null;
+const hasHoverMouse = () => window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 function tip(container) {
   if (!tipEl) {
     tipEl = htmlEl('div', 'viz-tip'); tipEl.setAttribute('role', 'status'); tipEl.hidden = true;
-    document.addEventListener('pointerdown', e => { if (!e.target.closest?.('.viz-hit')) hideTip(); }, true);
+    const outside = e => { if (!e.target.closest?.('.viz-hit')) hideTip(); };
+    document.addEventListener('pointerdown', outside, true);
     document.addEventListener('pointercancel', hideTip, true);
     document.addEventListener('scroll', hideTip, true);
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') hideTip(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' || e.key === 'Tab') hideTip(); });
     window.addEventListener('blur', hideTip);
     window.addEventListener('resize', hideTip);
   }
@@ -94,7 +96,7 @@ function showTip(container, x, y, title, rows, total, hint) {
   t.style.left = Math.max(8, Math.min(vw - w - 8, x + 14)) + 'px';
   t.style.top = Math.max(8, Math.min(vh - h - 8, y - h - 12 < 8 ? y + 16 : y - h - 12)) + 'px';
 }
-const hideTip = () => { if (tipEl) tipEl.hidden = true; touchHit = null; };
+const hideTip = () => { if (tipEl) tipEl.hidden = true; previewHit = null; };
 
 /** 图表外壳：标题、图例、切换表格、尺寸变化时重画 */
 function frame(container, opts, drawPlot, legendKind) {
@@ -237,6 +239,8 @@ export function columnChart(container, opts) {
       : Math.max(3, Math.min(24, band - 2, opts.stacked ? band * 0.62 : band * 0.8 / opts.series.length));
     const labelEvery = opts.visibleCount ? 1 : Math.max(1, Math.ceil(n / Math.max(1, Math.floor(iw / 46))));
     const groups = [];
+    let gesture = null;
+    const previewing = hit => previewHit === hit && tipEl?.isConnected && !tipEl.hidden;
     for (let i = 0; i < n; i++) {
       const cx = left + band * i + band / 2;
       const g = svgEl('g', { 'clip-path': `url(#${clipId})`, class: 'viz-col' + (opts.selected === i ? ' sel' : '') + (opts.partial && opts.partial[i] ? ' partial' : '') }, svg);
@@ -267,7 +271,6 @@ export function columnChart(container, opts) {
       // 命中区域：整条竖带，比柱子宽
       const hit = svgEl('rect', { x: left + band * i, y: PAD.top, width: band, height: ih, class: 'viz-hit', tabindex: '0', role: 'button',
         'aria-label': `${opts.longLabels ? opts.longLabels[i] : opts.labels[i]}` }, svg);
-      let pointerType = '';
       const show = (ev, touch = ev?.pointerType === 'touch' || ev?.pointerType === 'pen') => {
         groups.forEach(gg => gg.classList.remove('hover')); g.classList.add('hover');
         const rows = opts.series.filter(s => s.values[i] != null).map(s => ({ color: s.color, kind: 'bar', name: s.name, value: opts.format(s.values[i]) }));
@@ -276,24 +279,30 @@ export function columnChart(container, opts) {
         showTip(container, r.x, r.y, opts.longLabels ? opts.longLabels[i] : opts.labels[i], rows.reverse(), total,
           touch && opts.onSelect ? t('viz.tapAgain') : null);
       };
-      hit.addEventListener('pointerdown', e => { pointerType = e.pointerType; });
+      // 在聚焦及兼容 click 之前记录预览状态；同一手势只消费一次 click。
+      const begin = e => { gesture = { hit, confirmed: previewing(hit),
+        touch: e.type === 'touchstart' || e.pointerType === 'touch' || e.pointerType === 'pen', handled: false }; };
+      hit.addEventListener('pointerdown', begin);
+      hit.addEventListener('touchstart', begin, { passive: true });
+      hit.addEventListener('pointercancel', () => { if (gesture) gesture.handled = true; });
       hit.addEventListener('pointermove', show);
       hit.addEventListener('focus', () => show());
-      hit.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch' && e.pointerType !== 'pen') { g.classList.remove('hover'); hideTip(); } });
-      hit.addEventListener('blur', () => { g.classList.remove('hover'); hideTip(); });
+      hit.addEventListener('pointerleave', e => {
+        if (e.pointerType === 'mouse' && !gesture?.touch && hasHoverMouse()) { g.classList.remove('hover'); hideTip(); }
+      });
+      hit.addEventListener('click', e => {
+        if (!hit.isConnected) return;
+        if (gesture?.handled) return;
+        const confirmed = gesture ? gesture.hit === hit && gesture.confirmed : previewing(hit);
+        if (gesture) gesture.handled = true;
+        const mouse = hasHoverMouse() && !gesture?.touch && e.pointerType !== 'touch' && e.pointerType !== 'pen';
+        if (opts.onSelect && (mouse || confirmed && previewing(hit))) { hideTip(); opts.onSelect(i); }
+        else { show(e, true); previewHit = hit; }
+      });
       hit.addEventListener('keydown', e => {
         const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
         if (d && svg.querySelectorAll('.viz-hit')[i + d]) { e.preventDefault(); svg.querySelectorAll('.viz-hit')[i + d].focus(); }
         if ((e.key === 'Enter' || e.key === ' ') && opts.onSelect) { e.preventDefault(); hideTip(); opts.onSelect(i); }
-      });
-      hit.addEventListener('click', e => {
-        // Safari 的兼容 click 可能是 MouseEvent，保留 pointerdown 的输入类型。
-        const touch = e.pointerType === 'touch' || e.pointerType === 'pen'
-          || (!e.pointerType && e.detail !== 0 && (pointerType === 'touch' || pointerType === 'pen'));
-        if (touch && !(opts.onSelect && touchHit === hit && tipEl && !tipEl.hidden)) {
-          show(e, true); touchHit = hit; return;
-        }
-        if (opts.onSelect) { hideTip(); opts.onSelect(i); }
       });
     }
     if (opts.visibleCount) {
