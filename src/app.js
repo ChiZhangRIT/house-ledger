@@ -129,7 +129,7 @@ function renderShell() {
   const r0 = route().name;
   const cur = r0 === 'bill' ? 'bills' : r0 === 'person' ? 'tenants' : r0;
   side.replaceChildren(
-    h('div.brand', null, h('img', { src: 'icons/icon-180-v2.png', alt: '', width: 32, height: 32 }),
+    h('div.brand', null, h('img', { src: 'icons/icon-180-v3.png', alt: '', width: 32, height: 32 }),
       h('div', null, h('b', null, t('app.name')), S.settings.propertyName ? h('small', null, S.settings.propertyName) : null)),
     h('nav', { 'aria-label': t('nav.label') }, NAV.map(n => h('a.nav-item' + (cur === n.id ? '.on' : ''), { href: '#/' + n.id, 'aria-current': cur === n.id ? 'page' : null },
       navIcon(n.icon), t('nav.' + n.id)))),

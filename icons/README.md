@@ -1,5 +1,27 @@
 # House Ledger 图标
 
+## 当前版本 v3
+
+2026-11-15，采用已确认的统一设计：青绿渐变背景、奶白色实心房屋、镂空闪电。
+
+资源从 `/Users/chizhang/Documents/Repositories/babble/icon-update-kit/assets/house-ledger/icons/` 原样复制，未重新生成、缩放或修改图案，也未运行 `install.py`。
+
+- `icon.svg`：512 × 512 viewBox，SVG favicon。
+- `icon-180-v3.png`：180 × 180，Apple Touch Icon、PNG favicon 备用及 App 侧栏。
+- `icon-512-v3.png`：512 × 512，安装图标；两个 manifest 都引用 v3 PNG。
+- 上述三个文件均加入 `sw.js` 预缓存，缓存版本为 `house-ledger-v16`。
+- 原版 PNG、v2 PNG 与 v2 母版均保留。下方保留 v2 的来源和提示词，仅作为历史记录。
+
+原始资源 SHA-256（用于核对复制一致性）：
+
+```text
+cd2f34829744a6923b4ed13714ff4e5ff7a8127bd1ae669832c761064088574e  icon.svg
+563a24f63cbe24fea072cb41022ddb11fa1a659b7fedac495dd67445786040d6  icon-180-v3.png
+e26ce3b2df9b9db957a440a6c78366863f3bad99d883bc3362754ec352908591  icon-512-v3.png
+```
+
+## 历史版本 v2
+
 2026-11-11，使用内置 imagegen 根据现有房子与闪电图标，以及本次对话提供的青绿色 App 图标参考图，进行风格转换。
 
 - `icon-v2-master.png`：生成母版，原始文件字节保留。
@@ -8,7 +30,7 @@
 - 两个发布尺寸仅由母版等比缩小，不另外描绘或调整颜色。图片为不透明方形底，展示时使用对应入口的圆角。
 - 原版 `icon-512.png` 与 `icon-180.png` 保留，便于比对。
 
-## 生成提示词
+### 生成提示词
 
 ```text
 Use case: style-transfer
