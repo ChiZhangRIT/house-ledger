@@ -1,5 +1,5 @@
 // 账单详情：全部字段、分项、用量和单价、对比、分摊、来源；可以编辑、标记已缴、锁定/解锁、删除、加到日历
-import { h, openSheet, download } from '../ui/dom.js';
+import { h, openSheet, download, confirmDialog } from '../ui/dom.js';
 import { t, money, date, period, num, rate, unitLabel, relDays, getLang } from '../i18n.js';
 import { providerColor, ITEM_COLOR } from '../ui/colors.js';
 import { billStats, billShares } from '../core/analytics.js';
@@ -90,9 +90,10 @@ export function itemLabel(i) {
   return known !== 'item.' + i.key ? known : i.label || i.key;
 }
 
-function del(ctx, b) {
-  if (!confirm(t('bill.deleteConfirm'))) return;
+async function del(ctx, b) {
+  if (!(await confirmDialog({ message: t('bill.deleteConfirm'), confirmLabel: t('bill.delete'), danger: true }))) return;
   const prev = ctx.remove('bills', b.id);
+  if (!prev) return;      // 问的时候别的设备已经删了：不再提示、不给撤销
   ctx.nav('bills');
   ctx.toast(t('bill.deleted'), { action: t('undo'), onAction: () => ctx.put('bills', prev), ms: 10000 });
 }

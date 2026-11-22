@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createSync, toB64, fromB64, SYNC_FILE } from '../src/core/sync.js';
+import { createSync, toB64, fromB64, SYNC_FILE, syncCode, parseSyncCode, tokenDaysLeft, tokenWarn, syncPhase, validTokenExp } from '../src/core/sync.js';
 import { blankState, stamp } from '../src/core/store.js';
 
 // 一个最小的模拟 GitHub：一个文件、sha、409 冲突、ETag
@@ -106,4 +106,62 @@ test('仓库后来变成公开的：不再上传', async () => {
   assert.equal(r.ok, false);
   assert.equal(r.error.code, 'public');
   assert.equal(gh.puts, puts);
+});
+
+// ---------- 同步码和令牌到期日（令牌都是编的） ----------
+test('同步码：可以带令牌到期日；旧版不带到期日的照样认，别的 App 的同步码不认', () => {
+  assert.equal(syncCode('me/data', 'github_pat_example1', '2027-02-28'), 'house-ledger-sync:me/data:github_pat_example1:2027-02-28');
+  assert.equal(syncCode('me/data', 'github_pat_example1', null), 'house-ledger-sync:me/data:github_pat_example1');
+  assert.equal(syncCode('me/data', 'github_pat_example1', '0002-01-01'), 'house-ledger-sync:me/data:github_pat_example1', '键盘填了一半的年份不带上');
+  assert.deepEqual(parseSyncCode(' house-ledger-sync:me/data:github_pat_example1:2027-02-28 '), { repo: 'me/data', token: 'github_pat_example1', exp: '2027-02-28' });
+  assert.deepEqual(parseSyncCode('house-ledger-sync:me/data:github_pat_example1'), { repo: 'me/data', token: 'github_pat_example1', exp: null });
+  assert.deepEqual(parseSyncCode('house-ledger-sync:me/data:github_pat_example1:2027-02-30'), { repo: 'me/data', token: 'github_pat_example1', exp: null }, '不存在的日期当成没带');
+  assert.equal(parseSyncCode('picknest-sync:me/data:github_pat_example1'), null);
+  assert.equal(parseSyncCode('house-ledger-sync:me/data:'), null);
+  assert.equal(parseSyncCode('github_pat_example1'), null);
+  for (const exp of [null, '2027-02-28']) {
+    const code = syncCode('me/data', 'github_pat_example1', exp);
+    assert.deepEqual(parseSyncCode(code), { repo: 'me/data', token: 'github_pat_example1', exp });
+  }
+});
+
+test('令牌还有几天到期：按日历日算（跨夏令时也一样），两周内或已经过期才提醒', () => {
+  assert.equal(tokenDaysLeft('2026-03-08', '2026-03-07'), 1);         // 美国夏令时开始那天只有 23 小时
+  assert.equal(tokenDaysLeft('2026-11-01', '2026-10-31'), 1);
+  assert.equal(tokenDaysLeft('2026-12-06', '2026-11-22'), 14);
+  assert.equal(tokenDaysLeft('2026-11-22', '2026-11-22'), 0);
+  assert.equal(tokenDaysLeft('2026-11-20', '2026-11-22'), -2);
+  assert.equal(tokenDaysLeft(undefined, '2026-11-22'), null);
+  assert.equal(tokenDaysLeft('2026-02-30', '2026-11-22'), null);
+  assert.equal(tokenWarn('2026-12-06', '2026-11-22'), false, '还有 14 天：不提醒');
+  assert.equal(tokenWarn('2026-12-05', '2026-11-22'), true, '还有 13 天：提醒');
+  assert.equal(tokenWarn('2026-11-22', '2026-11-22'), true);
+  assert.equal(tokenWarn('2026-10-01', '2026-11-22'), true, '已经过期：一直提醒');
+  assert.equal(tokenWarn(null, '2026-11-22'), false);
+  assert.equal(validTokenExp('2027-01-31'), true);
+  assert.equal(validTokenExp('0020-01-31'), false);
+  assert.equal(validTokenExp(''), false);
+});
+
+test('同步状态：出错、离线优先；令牌快到期排在待同步前面，变成黄色', () => {
+  const today = '2026-11-22', soon = '2026-11-30';
+  assert.equal(syncPhase(null, today), 'off');
+  assert.equal(syncPhase({ err: { code: 'auth' }, tokenExp: soon }, today), 'err');
+  assert.equal(syncPhase({ offline: true, tokenExp: soon }, today), 'offline');
+  assert.equal(syncPhase({ dirty: true, tokenExp: soon }, today), 'token');
+  assert.equal(syncPhase({ tokenExp: '2026-11-01' }, today), 'token');
+  assert.equal(syncPhase({ dirty: true, tokenExp: '2027-06-01' }, today), 'pending');
+  assert.equal(syncPhase({ tokenExp: '2027-06-01' }, today), 'ok');
+  assert.equal(syncPhase({}, today), 'ok');
+});
+
+test('令牌和到期日只在本机设置里：不写进云端文件', async () => {
+  const gh = mockGitHub(), mac = device(gh, 'Mac');
+  mac.cfg.token = 'github_pat_example1'; mac.cfg.tokenExp = '2027-02-28';
+  mac.edit('b1', { total: 10 });
+  assert.equal((await mac.sync.syncNow()).ok, true);
+  const text = fromB64(gh.file);
+  assert.ok(!text.includes('github_pat_example1'));
+  assert.ok(!text.includes('2027-02-28'));
+  assert.ok(!('tokenExp' in gh.remote().state));
 });

@@ -2,9 +2,44 @@
 // 每次同步：先拉云端 → 和本机逐条合并 → 本机有云端没有的改动才上传；上传时带上云端版本号（sha），
 // 云端在这期间被别的设备改过就会返回 409，这时重新拉取合并再传。
 import { normalizeState, mergeStates, canon } from './store.js';
+import { daysBetween, isISODate } from './dates.js';
 
 export const GH_API = 'https://api.github.com';
 export const SYNC_FILE = 'house-ledger.json';
+export const CODE_PREFIX = 'house-ledger-sync:';
+export const TOKEN_WARN_DAYS = 14;            // 令牌到期前两周开始提醒（四个 App 一样）
+
+// ---------- 同步码、令牌到期日 ----------
+/** 令牌到期日：<input type=date> 的值。键盘输入时年份会先变成 0002、0020……，这种不当成真的日期 */
+export const validTokenExp = s => isISODate(s) && s >= '2000-01-01' && s <= '2999-12-31';
+/**
+ * 同步码：house-ledger-sync:<owner/repo>:<令牌>[:<令牌到期日 YYYY-MM-DD>]（复制到别的设备上粘贴；里面就是令牌原文）。
+ * 到期日是每台设备自己的本机设置：不带过去的话，用同步码连上的设备（iPhone、iPad 一般都是）永远不会提前提醒换令牌
+ */
+export const syncCode = (repo, token, exp = null) => `${CODE_PREFIX}${repo}:${token}${validTokenExp(exp) ? ':' + exp : ''}`;
+/** → { repo, token, exp（没带 → null） } | null。旧版复制的同步码没有到期日，照样认 */
+export function parseSyncCode(text) {
+  const m = String(text || '').trim().match(/^house-ledger-sync:([\w.-]+\/[\w.-]+):([^\s:]+)(?::(\d{4}-\d{2}-\d{2}))?$/);
+  return m ? { repo: m[1], token: m[2], exp: validTokenExp(m[3]) ? m[3] : null } : null;
+}
+/**
+ * 令牌还有几天到期：按日历日算（今天到期是 0，明天 1，过期了是负数）；没填 → null。
+ * today 是本地时区的今天（core/dates.js 的 today()）：按日期相减，不用毫秒差除以 24 小时（夏令时那天只有 23 小时）
+ */
+export const tokenDaysLeft = (exp, today) => (validTokenExp(exp) && isISODate(today) ? daysBetween(today, exp) : null);
+/** 该提醒换令牌了吗（两周内到期，或者已经过期） */
+export const tokenWarn = (exp, today) => { const d = tokenDaysLeft(exp, today); return d != null && d < TOKEN_WARN_DAYS; };
+/**
+ * 同步状态标签的样子：没开 off → 出错 err → 离线 offline → 令牌快到期 token → 有改动没传 pending → 已同步 ok。
+ * 令牌快到期排在「待同步」前面：两周里每天都会有改动，排在后面就几乎看不到提醒
+ */
+export function syncPhase(cfg, today) {
+  if (!cfg) return 'off';
+  if (cfg.err) return 'err';
+  if (cfg.offline) return 'offline';
+  if (tokenWarn(cfg.tokenExp, today)) return 'token';
+  return cfg.dirty ? 'pending' : 'ok';
+}
 
 export function toB64(text) {
   const bytes = new TextEncoder().encode(text);
@@ -28,7 +63,7 @@ export class SyncError extends Error {
  * @param {object} o
  * @param {() => object} o.getState            当前本机数据
  * @param {(merged, info) => void} o.applyRemote  合并出新内容时调用（info.device = 上次写入云端的设备名）
- * @param {() => object|null} o.getConfig      { repo, token, sha, etag, dirty, ... }，没开同步时返回 null
+ * @param {() => object|null} o.getConfig      { repo, token, tokenExp, sha, etag, dirty, ... }，没开同步时返回 null（tokenExp：用户填的令牌到期日，只用来提醒）
  * @param {(cfg) => void} o.saveConfig         保存同步状态（只存本机，不进数据）
  * @param {() => number} o.editVersion         本机数据的修改计数：上传期间又改过的话，上传完仍然算「有改动」
  * @param {string} o.device                    这台设备的名字（写进云端，方便提示是谁改的）

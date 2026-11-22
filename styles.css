@@ -95,6 +95,10 @@ h1, h2, h3 { margin: 0; font-weight: 650; letter-spacing: -0.01em; }
 .btn.primary:hover { filter: brightness(1.06); }
 .btn.primary.disabled { opacity: .55; }
 .btn.danger { color: var(--critical); }
+/* 确认框里会删东西的那个按钮：红底。深色主题的红比较浅，白字看不清，用深色字 */
+.btn.danger-fill { background: var(--critical); border-color: var(--critical); color: #fff; }
+.btn.danger-fill:hover { background: var(--critical); filter: brightness(1.06); }
+:root[data-theme="dark"] .btn.danger-fill { color: #2a0d0a; }
 .btn.small { min-height: 30px; padding: 3px 10px; font-size: 13px; }
 .btn:disabled { opacity: .5; cursor: default; }
 .icon-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; min-height: 36px; border: 0; background: none; border-radius: 8px; color: var(--ink-2); font-size: 18px; cursor: pointer; text-decoration: none !important; }
@@ -239,8 +243,16 @@ dialog.sheet::backdrop { background: rgba(20, 18, 14, .38); }
 }
 .sheet-body { padding: 16px 20px 20px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .sheet-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--surface-2); }
+/* 确认框（ui/dom.js 的 confirmDialog）：窄一点；没有标题时不要空的标题栏，Esc 和「取消」照样能关 */
+dialog.sheet.confirm { width: min(420px, calc(100vw - 24px)); }
+dialog.confirm .sheet-head:has(> h2:empty) { display: none; }
+dialog.confirm .sheet-body { padding-top: 20px; }
+.confirm-msg { font-size: 15.5px; line-height: 1.6; }
+.confirm-msg p { margin: 0; }
+.confirm-msg p + p { margin-top: 8px; }
+dialog.confirm .sheet-foot { border-top: 0; background: none; padding-top: 0; }
 @media (max-width: 719px) {
-  dialog.sheet, dialog.sheet.wide { width: 100vw; max-width: 100vw; max-height: 92vh; margin: auto 0 0; border-radius: 16px 16px 0 0; }
+  dialog.sheet, dialog.sheet.wide, dialog.sheet.confirm { width: 100vw; max-width: 100vw; max-height: 92vh; margin: auto 0 0; border-radius: 16px 16px 0 0; }
 }
 .form, .bill-form { display: flex; flex-direction: column; gap: 12px; }
 fieldset { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px 14px; margin: 0; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
@@ -255,6 +267,15 @@ section.settings-sec { display: flex; flex-direction: column; gap: 12px; }
 .settings-sec > .btn, .settings-sec > .link-btn { align-self: flex-start; }
 details.settings-sec[open] > :not(summary) { margin-top: 12px; }
 .settings-property .field { max-width: 640px; }
+/* 语言、外观：一行，左边标题右边下拉菜单 */
+.settings-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; }
+.settings-row-label { font-weight: 600; }
+.settings-row select { min-width: 190px; }
+.sync-exp-row { align-items: flex-end; }
+.sync-exp-row .field { flex: 1 1 170px; max-width: 260px; }
+.sync-exp-form .note { margin-top: 4px; }
+.sync-exp-warn { margin: 0; padding: 8px 12px; border-left: 3px solid var(--warning-fill); border-radius: var(--radius-s); background: var(--warning-soft); color: var(--ink); }
+.settings-update { color: var(--accent); font-weight: 600; }
 .settings-property > .section-h { font-size: 18px; }
 .settings-sec > .pdf-batch { margin-top: 0; padding-top: 0; border-top: 0; }
 .field-label { font-size: 12.5px; color: var(--ink-2); font-weight: 560; display: flex; align-items: center; gap: 6px; }
@@ -355,6 +376,7 @@ details.card summary { cursor: pointer; font-weight: 600; }
 .sync-badge.ok .dot { background: var(--good); }
 .sync-badge.wait .dot { background: var(--ink-3); }
 .sync-badge.err .dot { background: var(--critical); }
+.sync-badge.warn .dot { background: var(--warning-fill); }
 .sync-badge.off .dot { background: transparent; border: 1.5px solid var(--ink-3); }
 
 /* ---------- 图表 ---------- */

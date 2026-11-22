@@ -1,6 +1,6 @@
 // 账单确认 / 编辑表单：PDF 识别出来的草稿、手动录入、修改已有账单都用这一张。
 // 改任何字段，检查结果、对比和分摊预览都立刻重算；保存后自动分摊（分摊是现算的，见 core/analytics.js 的 billShares）。
-import { h, openSheet, signButton } from '../ui/dom.js';
+import { h, openSheet, signButton, confirmDiscard } from '../ui/dom.js';
 import { t, money, pct, num, unitLabel, period, date } from '../i18n.js';
 import { billChecks } from '../core/checks.js';
 import { billStats, compareBill, billShares, billDays } from '../core/analytics.js';
@@ -243,7 +243,7 @@ export function openBillForm(ctx, o) {
     title: o.existing ? t('form.editTitle') : t('form.newTitle'), wide: true, body,
     foot: [o.queue && o.queue.n > 1 ? h('button.btn', { type: 'button', onclick: () => { done = true; skipped = true; sheet.close(); } }, t('form.skip')) : null,
       h('span.sp'), h('button.btn', { type: 'button', onclick: () => sheet.tryClose() }, t('cancel')), saveBtn].filter(Boolean),
-    beforeClose: () => done || !dirty || confirm(t('form.discard')),
+    beforeClose: () => done || !dirty || confirmDiscard(),
     onClose: () => { if (o.onDone) o.onDone({ saved, skipped }); },
   });
   for (const f of Object.keys(tags)) markTag(f);

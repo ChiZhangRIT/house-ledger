@@ -1,6 +1,6 @@
 // 住户：时间轴 + 列表；编辑入住/搬出、权重、参与方式（分摊 / 不参与 / 房东承担）、月租。
 // 保存前如果会改变金额（未锁定账单的分摊、房租），先给出影响预览。
-import { h, openSheet } from '../ui/dom.js';
+import { h, openSheet, confirmDialog, confirmDiscard } from '../ui/dom.js';
 import { t, money, date } from '../i18n.js';
 import { personColor } from '../ui/colors.js';
 import { dayNumber, addDays, isISODate, overlapDays } from '../core/dates.js';
@@ -131,9 +131,11 @@ export function openResident(ctx, r) {
     const used = lived || ctx.D.bills.some(b => b.allocation && b.allocation.shares && b.allocation.shares[w.id]) || ctx.D.payments.some(p => p.residentId === w.id)
       || Object.values(ctx.S.data.adjustments || {}).some(a => !a.deleted && a.residentId === w.id) || Object.values(ctx.S.data.rents || {}).some(a => !a.deleted && a.residentId === w.id);
     if (used) { fail(t('res.cantDelete')); return; }
-    if (!confirm(t('res.deleteConfirm', { name: w.name }))) return;
-    ctx.remove('residents', w.id);
-    sheet.close();
+    confirmDialog({ message: t('res.deleteConfirm', { name: w.name }), confirmLabel: t('bill.delete'), danger: true }).then(yes => {
+      if (!yes) return;
+      ctx.remove('residents', w.id);
+      sheet.close();
+    });
   };
   const schedules = h('div');
   const drawSchedules = () => schedules.replaceChildren(...w.rentSchedules.map((x, i) => {
@@ -203,7 +205,7 @@ export function openResident(ctx, r) {
       err),
     foot: [!isNew ? h('button.btn.danger', { type: 'button', onclick: del }, t('bill.delete')) : null, h('span.sp'),
       h('button.btn', { type: 'button', onclick: () => sheet.tryClose() }, t('cancel')), h('button.btn.primary', { type: 'button', onclick: save }, t('save'))].filter(Boolean),
-    beforeClose: () => !dirty || confirm(t('form.discard')),
+    beforeClose: () => !dirty || confirmDiscard(),
   });
   const origClose = sheet.close;
   sheet.close = () => { dirty = false; origClose(); };

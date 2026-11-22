@@ -1,5 +1,5 @@
 // 收款相关的面板：记收款、加调整、导出明细、某人某期的明细
-import { h, openSheet, copyText, signButton } from '../ui/dom.js';
+import { h, openSheet, copyText, signButton, confirmDialog } from '../ui/dom.js';
 import { t, money, date, period, getLang, LANG_LABELS } from '../i18n.js';
 import { newId } from '../core/store.js';
 import { addDays, isISODate } from '../core/dates.js';
@@ -154,21 +154,20 @@ export function openPayment(ctx, { residentId, amount, rentId, payment, refund =
 export function deleteRentPayment(ctx, payment, onChange) {
   payment = paymentTransfer(ctx.S, payment);
   payment = ctx.S.data.payments[payment.id] || payment;
-  const confirmation = openSheet({ title: t('bill.delete'), closeLabel: t('rent.close'), body: h('div', null,
-    h('p', null, t('housing.totalAmount'), ' · ', money(payment.amount)),
-    h('p', null, t(paymentAllocations(payment).length > 1 ? 'housing.deleteTransferConfirm' : 'pay.deleteConfirm'))),
-    foot: [h('span.sp'), h('button.btn', { type: 'button', onclick: () => confirmation.close() }, t('cancel')),
-      h('button.btn.danger', { type: 'button', onclick: () => {
-        let previous;
-        ctx.batch(() => {
-          const changes = rentReceiptChanges(ctx.S, payment);
-          if (changes.rent) ctx.put('rents', changes.rent);
-          if (!ctx.S.data.payments[payment.id]) ctx.put('payments', changes.receipt);
-          previous = ctx.remove('payments', payment.id);
-        });
-        confirmation.close(); onChange?.();
-        ctx.toast(t('pay.deleted'), { action: t('undo'), onAction: () => { ctx.put('payments', previous); onChange?.(); }, ms: 10000 });
-      } }, t('bill.delete'))] });
+  confirmDialog({ title: t('bill.delete'), confirmLabel: t('bill.delete'), danger: true, message: [
+    t('housing.totalAmount') + ' · ' + money(payment.amount),
+    t(paymentAllocations(payment).length > 1 ? 'housing.deleteTransferConfirm' : 'pay.deleteConfirm')] }).then(yes => {
+    if (!yes) return;
+    let previous;
+    ctx.batch(() => {
+      const changes = rentReceiptChanges(ctx.S, payment);
+      if (changes.rent) ctx.put('rents', changes.rent);
+      if (!ctx.S.data.payments[payment.id]) ctx.put('payments', changes.receipt);
+      previous = ctx.remove('payments', payment.id);
+    });
+    onChange?.();
+    if (previous) ctx.toast(t('pay.deleted'), { action: t('undo'), onAction: () => { ctx.put('payments', previous); onChange?.(); }, ms: 10000 });
+  });
 }
 
 /** 加一笔调整：正数加收，负数减免；期初余额用 kind = opening */

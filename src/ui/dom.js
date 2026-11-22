@@ -54,7 +54,16 @@ export function openSheet({ title, body, foot, wide, onClose, beforeClose, close
   const dlg = h('dialog.sheet' + (wide ? '.wide' : ''), { 'aria-label': title });
   const bodyEl = h('div.sheet-body');
   const close = () => { if (dlg.open) dlg.close(); };
-  const tryClose = () => { if (!beforeClose || beforeClose() !== false) close(); };   // beforeClose 返回 false 时不关（比如有没保存的修改）
+  // beforeClose 返回 false 时不关（比如有没保存的修改）；也可以返回 Promise（App 里的确认框），等回答了再决定。
+  // 问着的时候再按 Esc、点 ✕ 不再问第二遍
+  let asking = false;
+  const tryClose = () => {
+    if (!beforeClose) return close();
+    if (asking) return;
+    const ok = beforeClose();
+    if (ok && typeof ok.then === 'function') { asking = true; ok.then(v => { asking = false; if (v !== false) close(); }, () => { asking = false; }); }
+    else if (ok !== false) close();
+  };
   const titleEl = h('h2', null, title);
   const head = h('div.sheet-head', null, titleEl, h('button.icon-btn', { type: 'button', 'aria-label': closeLabel, onclick: tryClose }, '✕'));
   dlg.append(
@@ -86,6 +95,13 @@ export function openSheet({ title, body, foot, wide, onClose, beforeClose, close
   };
   const observer = new ResizeObserver(fit);
   observer.observe(dlg); window.addEventListener('resize', fit);
+  // Esc 自己处理，不交给浏览器去关 dialog：Chrome 里 Esc 连按、中间没点过东西时，第二下的 cancel 事件拦不住，面板会不问就关掉；
+  // 按 Esc 弹出来的确认框还会和下面的面板算成一组，在确认框里按 Esc 会两个一起关——没保存的修改就丢了。
+  // 输入法还在选字（isComposing / 229）时的 Esc 是给输入法的，不管。cancel 事件留给别的关闭方式（比如安卓的返回键）
+  dlg.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing || e.keyCode === 229) return;
+    e.preventDefault(); tryClose();
+  });
   dlg.addEventListener('cancel', e => { e.preventDefault(); tryClose(); });
   const sheet = { el: dlg, body: bodyEl, close, tryClose, setTitle: (x) => { titleEl.textContent = x; } };
   const content = typeof body === 'function' ? body(sheet) : body;
@@ -100,6 +116,42 @@ export function openSheet({ title, body, foot, wide, onClose, beforeClose, close
   dlg.showModal();
   return sheet;
 }
+
+// ---------- 确认框 ----------
+let confirmSeq = 0;
+/**
+ * App 里的确认框，代替浏览器的 confirm()：await confirmDialog({ title, message, confirmLabel, danger }) → true / false。
+ * message 可以是一句话或几段（数组）。读屏打开就要听到问的是什么：有标题时标题是名字、那几段是说明（aria-describedby）；
+ * 没有标题时那几段就是名字（aria-labelledby）。
+ * danger（删除、清空这台设备、停止同步、放弃没保存的修改）：按钮是红底的，焦点先给「取消」，连按两下回车不会直接删掉；
+ * 不会丢东西的焦点给确定
+ */
+export function confirmDialog(opts) {
+  const o = typeof opts === 'string' ? { message: opts } : (opts || {});
+  const paras = [].concat(o.message == null ? [] : o.message).filter(x => x != null && x !== '');
+  return new Promise(resolve => {
+    let answer = false;
+    const msgId = 'confirm-msg-' + (++confirmSeq);
+    const cancel = h('button.btn', { type: 'button', onclick: () => s.close() }, o.cancelLabel || t('cancel'));
+    const ok = h('button.btn' + (o.danger ? '.danger-fill' : '.primary'), { type: 'button', onclick: () => { answer = true; s.close(); } }, o.confirmLabel || t('confirm.ok'));
+    const s = openSheet({
+      title: o.title || '',
+      closeLabel: t('cancel'),
+      body: paras.length ? h('div.confirm-msg', { id: msgId }, paras.map(p => h('p', null, p))) : null,
+      foot: [h('span.sp'), cancel, ok],
+      onClose: () => resolve(answer),
+    });
+    s.el.classList.add('confirm');
+    if (paras.length) {
+      if (o.title) s.el.setAttribute('aria-describedby', msgId);
+      else { s.el.removeAttribute('aria-label'); s.el.setAttribute('aria-labelledby', msgId); }
+    }
+    (o.danger ? cancel : ok).focus();
+  });
+}
+
+/** 有没保存的修改时关面板（openSheet 的 beforeClose）：「继续编辑」在前、焦点也在它上面，红底的「放弃」在后 */
+export const confirmDiscard = () => confirmDialog({ message: t('form.discard'), cancelLabel: t('form.keepEditing'), confirmLabel: t('form.discardBtn'), danger: true });
 
 /** 金额输入框旁边的「±」：iPhone 的数字键盘没有负号（退款、减免、抵扣要用负数） */
 export function signButton(input, label = '±') {

@@ -1,5 +1,5 @@
 // 房租记录统一编辑；旧字段只为兼容已有记录，来源不影响功能。
-import { h, openSheet, signButton } from '../ui/dom.js';
+import { h, openSheet, signButton, confirmDialog, confirmDiscard } from '../ui/dom.js';
 import { t, money } from '../i18n.js';
 import { newId } from '../core/store.js';
 import { validateRentRecord, calculateRentPeriod, rentRecordEntries, rentPayments } from '../core/rent.js';
@@ -120,7 +120,7 @@ export function openRentPeriod(ctx, residentId, record, { onSave } = {}) {
       err, h('button', { type: 'submit', hidden: true })),
     foot: [record ? h('button.btn.danger', { type: 'button', onclick: remove }, t('rent.deleteRecord')) : null, h('span.sp'),
       h('button.btn', { type: 'button', onclick: () => sheet.tryClose() }, t('cancel')), h('button.btn.primary', { type: 'button', onclick: save }, t('save'))].filter(Boolean),
-    beforeClose: () => !dirty || confirm(t('form.discard')),
+    beforeClose: () => !dirty || confirmDiscard(),
   });
   return sheet;
 }
@@ -130,21 +130,21 @@ export function deleteRentRecord(ctx, record, onChange) {
   const entries = rentRecordEntries(ctx.S, record);
   const shared = rentPayments(ctx.S).some(payment => payment.rentId === record.id && payment.residentId === record.residentId && payment.transferId
     && !entries.some(([collection, entry]) => collection === 'payments' && entry.id === payment.transferId));
-  const confirmation = openSheet({ title: t('rent.deleteRecord'), closeLabel: t('rent.close'), body: h('div', null,
-    h('p', null, rentRange(record)), h('p', null, t(shared ? 'housing.deleteSharedPeriod' : 'rent.rowDeleteConfirm'))),
-    foot: [h('span.sp'), h('button.btn', { type: 'button', onclick: () => confirmation.close() }, t('cancel')),
-      h('button.btn.danger', { type: 'button', onclick: () => {
-        const entries = rentRecordEntries(ctx.S, record);
-        ctx.batch(() => {
-          for (const [collection, entry] of entries) {
-            if (!ctx.S.data[collection][entry.id]) ctx.put(collection, entry);
-            ctx.remove(collection, entry.id);
-          }
-        });
-        confirmation.close(); onChange?.();
-        ctx.toast(t('rent.recordDeleted'), { action: t('undo'), onAction: () => {
-          ctx.batch(() => { for (const [collection, entry] of entries) ctx.put(collection, entry); });
-          onChange?.();
-        }, ms: 10000 });
-      } }, t('bill.delete'))] });
+  confirmDialog({ title: t('rent.deleteRecord'), confirmLabel: t('bill.delete'), danger: true,
+    message: [rentRange(record), t(shared ? 'housing.deleteSharedPeriod' : 'rent.rowDeleteConfirm')] }).then(yes => {
+    if (!yes) return;
+    // 问的这段时间里可能同步进来别的改动：按回答时的数据重新取一次
+    const entries = rentRecordEntries(ctx.S, record);
+    ctx.batch(() => {
+      for (const [collection, entry] of entries) {
+        if (!ctx.S.data[collection][entry.id]) ctx.put(collection, entry);
+        ctx.remove(collection, entry.id);
+      }
+    });
+    onChange?.();
+    ctx.toast(t('rent.recordDeleted'), { action: t('undo'), onAction: () => {
+      ctx.batch(() => { for (const [collection, entry] of entries) ctx.put(collection, entry); });
+      onChange?.();
+    }, ms: 10000 });
+  });
 }

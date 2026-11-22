@@ -1,5 +1,5 @@
 // 收款：按收款期对账（本期表）或者看多期的矩阵。房租 + 水电网份额 + 调整，先到期先抵。
-import { h } from '../ui/dom.js';
+import { h, confirmDialog } from '../ui/dom.js';
 import { t, money, date, period, pct } from '../i18n.js';
 import { nextPeriod, prevPeriod, periodRange } from '../core/ledger.js';
 import { today } from '../core/dates.js';
@@ -88,7 +88,7 @@ function table(root, ctx, key) {
     h('table.data-table', null, h('tbody', null, pays.map(x => h('tr', null,
       h('th', null, (ctx.S.data.residents[x.residentId] || {}).name || '?', h('div.sub', null, date(x.date), ' · ', t('method.' + (x.method || 'other')), x.note ? ' · ' + x.note : '')),
       h('td.num', null, money(x.amount)),
-      h('td.num', null, h('button.link-btn', { type: 'button', onclick: () => { if (confirm(t('pay.deleteConfirm'))) { const prev = ctx.remove('payments', x.id); ctx.toast(t('pay.deleted'), { action: t('undo'), onAction: () => ctx.put('payments', prev) }); } } }, t('bill.delete')))))))));
+      h('td.num', null, h('button.link-btn', { type: 'button', onclick: async () => { if (!(await confirmDialog({ message: t('pay.deleteConfirm'), confirmLabel: t('bill.delete'), danger: true }))) return; const prev = ctx.remove('payments', x.id); if (prev) ctx.toast(t('pay.deleted'), { action: t('undo'), onAction: () => ctx.put('payments', prev) }); } }, t('bill.delete')))))))));
 }
 
 function matrix(root, ctx, key) {

@@ -1,4 +1,4 @@
-import { h, openSheet } from '../ui/dom.js';
+import { h, openSheet, confirmDialog } from '../ui/dom.js';
 import { t } from '../i18n.js';
 import { notesFor, patchNoteThread, hasVisibleNote } from '../core/sourceNotes.js';
 
@@ -17,9 +17,7 @@ export function openRecordNote(ctx, collection, id, onChange) {
 }
 
 function deleteConfirmation(action) {
-  const sheet = openSheet({ title: t('notes.delete'), closeLabel: t('rent.close'), body: h('p', null, t('notes.deleteConfirm')),
-    foot: [h('span.sp'), h('button.btn', { type: 'button', onclick: () => sheet.close() }, t('cancel')),
-      h('button.btn.danger', { type: 'button', onclick: () => { action(); sheet.close(); } }, t('bill.delete'))] });
+  confirmDialog({ title: t('notes.delete'), message: t('notes.deleteConfirm'), confirmLabel: t('bill.delete'), danger: true }).then(yes => { if (yes) action(); });
 }
 
 function editThread(ctx, note, path, comment, onChange) {

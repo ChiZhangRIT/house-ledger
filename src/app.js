@@ -1,10 +1,11 @@
 // 合租账本：启动、数据、路由、同步。各页面在 views/ 里，计算在 core/ 里。
 import { normalizeState, mergeStates, stamp, live, canon, deletedRecord } from './core/store.js';
-import { createSync } from './core/sync.js';
+import { createSync, syncPhase } from './core/sync.js';
 import { buildRentLedger, housingPayments } from './core/rent.js';
 import { today } from './core/dates.js';
 import { t, setLang, getLang, LANGS } from './i18n.js';
-import { h, $, toast } from './ui/dom.js';
+import { h, $, toast, confirmDialog } from './ui/dom.js';
+import { BUILD, newerBuild } from './version.js';
 import * as bills from './views/bills.js';
 import * as billDetail from './views/billDetail.js';
 import * as tenants from './views/tenants.js';
@@ -111,6 +112,9 @@ const ctx = {
   sync: null, saveLocal, setLang: (l) => { L.lang = l; saveLocal(); setLang(l); renderShell(); render(); },
   setTheme: (th) => { L.theme = th; saveLocal(); applyTheme(); render(); },
   get editVersion() { return editVersion; },
+  build: BUILD,
+  /** 新版本已经在后台装好、这一页跑的还是旧代码（设置 → 隐私与关于里说一声） */
+  updateReady: () => updateReady,
 };
 
 // ---------- 外壳：侧边栏（大屏）/ 底部标签（手机） ----------
@@ -140,15 +144,12 @@ function renderShell() {
 }
 
 function syncBadge() {
-  const s = L.sync;
-  let cls = 'off', text = t('sync.off');
-  if (s) {
-    if (s.err) { cls = 'err'; text = t('sync.error'); }
-    else if (s.offline) { cls = 'wait'; text = t('sync.offline'); }
-    else if (s.dirty) { cls = 'wait'; text = t('sync.pending'); }
-    else { cls = 'ok'; text = s.at ? t('sync.ok', { time: new Date(s.at).toLocaleTimeString(getLang(), { hour: 'numeric', minute: '2-digit' }) }) : t('sync.ok0'); }
-  }
-  return h('a.sync-badge.' + cls, { href: '#/settings', title: s && s.err ? t('syncErr.' + s.err.code, s.err.vars) : '' }, h('span.dot', { 'aria-hidden': 'true' }), text);
+  const s = L.sync, todayIso = today(), phase = syncPhase(s, todayIso);
+  const cls = { off: 'off', err: 'err', offline: 'wait', pending: 'wait', token: 'warn', ok: 'ok' }[phase];
+  const text = phase === 'ok' ? (s.at ? t('sync.ok', { time: new Date(s.at).toLocaleTimeString(getLang(), { hour: 'numeric', minute: '2-digit' }) }) : t('sync.ok0'))
+    : t({ off: 'sync.off', err: 'sync.error', offline: 'sync.offline', pending: 'sync.pending', token: 'sync.tokenSoon' }[phase]);
+  const title = phase === 'err' ? t('syncErr.' + s.err.code, s.err.vars) : phase === 'token' ? settings.expiryText(s.tokenExp, todayIso) : '';
+  return h('a.sync-badge.' + cls, { href: '#/settings', title }, h('span.dot', { 'aria-hidden': 'true' }), text);
 }
 function renderSyncBadge() {
   const foot = $('#side .sync-status'); if (foot) foot.replaceChildren(syncBadge());
@@ -182,7 +183,10 @@ function render() {
       h('div.row', null,
         h('button.btn', { type: 'button', onclick: () => { const a = h('a', { href: URL.createObjectURL(new Blob([JSON.stringify({ app: 'house-ledger', kind: 'backup', v: 1, createdAt: new Date().toISOString(), state: S })], { type: 'application/json' })), download: 'house-ledger-backup.json' }); document.body.append(a); a.click(); a.remove(); } }, t('set.export')),
         L.sync ? h('button.btn', { type: 'button', onclick: () => ctx.sync.stop() }, t('set.stopSync')) : null,
-        h('button.btn.danger', { type: 'button', onclick: () => { if (confirm(t('set.clearConfirm'))) { localStorage.removeItem(KEY); location.reload(); } } }, t('set.clear')))));
+        h('button.btn.danger', { type: 'button', onclick: async () => {
+          if (!(await confirmDialog({ message: t('set.clearConfirm'), confirmLabel: t('set.clear'), danger: true }))) return;
+          localStorage.removeItem(KEY); location.reload();
+        } }, t('set.clear')))));
   }
   main.scrollTop = keep;
   if (rentScroll) { const list = main.querySelector('.rent-record-list'); if (list) { list.scrollTop = rentScroll.top; list.scrollLeft = rentScroll.left; } }
@@ -215,12 +219,42 @@ ctx.sync = {
 function schedulePush() { clearTimeout(pushTimer); pushTimer = setTimeout(() => ctx.sync.now(), 1500); }
 const syncSoon = () => { if (L.sync && Date.now() - lastSyncTry > 5000) ctx.sync.now(); };
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') syncSoon();
+  if (document.visibilityState === 'visible') { syncSoon(); checkUpdate(); }
   else if (L.sync && L.sync.dirty) ctx.sync.now();
 });
 window.addEventListener('focus', () => { syncSoon(); if (cache && cache.today !== today()) render(); });
 window.addEventListener('online', () => { if (L.sync) ctx.sync.now(); });
 setInterval(() => { if (document.visibilityState === 'visible') syncSoon(); }, 60000);
+
+// ---------- 新版本 ----------
+// 主屏幕上的 App 常常几天都只是切回来、不是重新打开，浏览器只在打开（导航）时才去看 sw.js 变了没有，
+// register() 对已经装好的也不再检查：所以启动后、切回来时（最多半小时一次）自己 update()。
+// sw.js 装好就 skipWaiting + clients.claim（这里不改）：新 worker 接管这一页时有 controllerchange，可这一页跑的还是打开时的代码，
+// 关掉再打开才是新版，在「设置 → 隐私与关于」里说一声。第一次装（之前没有控制者）也有 controllerchange，那不算新版；
+// 打开时程序文件走网络、页面已经是新代码，随后才换 worker 的也不算——所以要用 version.js 的 newerBuild 比版本号
+const UPDATE_EVERY = 30 * 60 * 1000;
+let updateReady = false, lastUpdateCheck = 0;
+function checkUpdate() {
+  const sw = navigator.serviceWorker;
+  if (!sw || !sw.controller || Date.now() - lastUpdateCheck < UPDATE_EVERY) return;
+  lastUpdateCheck = Date.now();
+  sw.getRegistration().then(reg => reg && reg.update()).catch(() => { /* 离线、GitHub Pages 出错：下次再看 */ });
+}
+function watchUpdates() {
+  const sw = navigator.serviceWorker;
+  let controlled = !!sw.controller;
+  sw.addEventListener('controllerchange', () => {
+    const before = controlled;
+    controlled = true;
+    if (!before || updateReady || typeof caches === 'undefined') return;
+    caches.keys().then(keys => {
+      if (!newerBuild(keys)) return;
+      updateReady = true;
+      // 不整页重画（会打断正在填的表单）：设置页开着的话只把那一行露出来
+      for (const el of document.querySelectorAll('.settings-update')) { el.hidden = false; const d = el.closest('details'); if (d) d.open = true; }
+    }).catch(() => {});
+  });
+}
 
 // ---------- 把 PDF 拖进窗口 ----------
 let dragDepth = 0;
@@ -248,5 +282,8 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if
 window.addEventListener('hashchange', render);
 render();
 if (L.sync) ctx.sync.now();
-if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  watchUpdates();
+  navigator.serviceWorker.register('sw.js').then(() => checkUpdate()).catch(() => {});
+}
 window.__hl = { get S() { return S; }, ctx };   // 方便在浏览器控制台里查看
